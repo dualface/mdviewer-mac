@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="MDViewerMac"
+APP_NAME="MarkdownViewer"
 SCHEME="MDViewerMac"
 PROJECT_FILE="MDViewerMac.xcodeproj"
 CONFIGURATION="Release"
@@ -124,7 +124,7 @@ create_dmg() {
 
     rm -f "$asset_path"
     hdiutil create \
-        -volname "MDViewer $VERSION" \
+        -volname "MarkdownViewer $VERSION" \
         -srcfolder "$staging_dir" \
         -ov \
         -format UDZO \

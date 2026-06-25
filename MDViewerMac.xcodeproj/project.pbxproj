@@ -256,6 +256,8 @@
 				);
 				MARKETING_VERSION = 0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dualface.mdviewer.mac;
+				PRODUCT_MODULE_NAME = MDViewerMac;
+				PRODUCT_NAME = MarkdownViewer;
 				SDKROOT = macosx;
 			};
 			name = Debug;
@@ -396,7 +398,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.dualface.mdviewer.mac.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MDViewerMac.app/Contents/MacOS/MDViewerMac";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MarkdownViewer.app/Contents/MacOS/MarkdownViewer";
 			};
 			name = Debug;
 		};
@@ -413,7 +415,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.dualface.mdviewer.mac.tests;
 				SDKROOT = macosx;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MDViewerMac.app/Contents/MacOS/MDViewerMac";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MarkdownViewer.app/Contents/MacOS/MarkdownViewer";
 			};
 			name = Release;
 		};
@@ -433,6 +435,8 @@
 				);
 				MARKETING_VERSION = 0.5;
 				PRODUCT_BUNDLE_IDENTIFIER = com.dualface.mdviewer.mac;
+				PRODUCT_MODULE_NAME = MDViewerMac;
+				PRODUCT_NAME = MarkdownViewer;
 				SDKROOT = macosx;
 			};
 			name = Release;

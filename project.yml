@@ -23,8 +23,8 @@ targets:
     info:
       path: App/Generated/Info.plist
       properties:
-        CFBundleDisplayName: MDViewer
-        CFBundleName: MDViewer
+        CFBundleDisplayName: MarkdownViewer
+        CFBundleName: MarkdownViewer
         CFBundleShortVersionString: "$(MARKETING_VERSION)"
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.productivity
@@ -63,6 +63,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.dualface.mdviewer.mac
+        PRODUCT_NAME: MarkdownViewer
+        PRODUCT_MODULE_NAME: MDViewerMac
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         MARKETING_VERSION: "0.5"
         CURRENT_PROJECT_VERSION: "1"
@@ -82,3 +84,5 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.dualface.mdviewer.mac.tests
         GENERATE_INFOPLIST_FILE: "YES"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/MarkdownViewer.app/Contents/MacOS/MarkdownViewer"
+        BUNDLE_LOADER: "$(TEST_HOST)"
