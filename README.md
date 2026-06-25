@@ -105,7 +105,15 @@ Useful options include `--tag v0.1.0`, `--repo owner/repo`, `--notes-file RELEAS
 
 ### Signing and Notarization
 
-Release signing is configured from local arguments or environment variables only. Do not commit certificate names, Team IDs, Apple IDs, app-specific passwords, API keys, or notary profiles.
+Release signing is configured from local arguments, Keychain identities, or environment variables only. Do not commit certificate names, Team IDs, Apple IDs, app-specific passwords, API keys, or notary profiles.
+
+Build a locally signed release without uploading:
+
+```bash
+scripts/release.sh --sign --skip-upload
+```
+
+When no explicit identity is provided, the script auto-selects the first available identity in this order: `Developer ID Application`, `Apple Distribution`, then `Apple Development`.
 
 Store notarization credentials in the local Keychain:
 
@@ -121,7 +129,7 @@ MDVIEWER_NOTARY_PROFILE="mdviewer-notary" \
 scripts/release.sh --sign --notarize
 ```
 
-For a signed build without notarization, omit `--notarize`. The signing identity can also be passed with `--signing-identity`, and the notary profile can be passed with `--notary-profile`.
+Notarization requires a `Developer ID Application` certificate. For a signed build without notarization, omit `--notarize`. The signing identity can also be passed with `--signing-identity`, and the notary profile can be passed with `--notary-profile`.
 
 ## Sandbox and File Access
 

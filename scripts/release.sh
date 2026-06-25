@@ -46,9 +46,11 @@ Options:
   --skip-tests        Skip the XCTest step.
   --skip-upload       Build and package locally without creating a GitHub release.
   --allow-dirty       Allow releasing with uncommitted working tree changes.
-  --sign              Sign the app with a Developer ID Application certificate.
+  --sign              Sign the app with an available local certificate.
   --notarize          Notarize and staple the signed app before packaging.
-  --signing-identity  Developer ID Application signing identity.
+  --signing-identity  Signing identity. If omitted, the script auto-selects
+                      Developer ID Application, Apple Distribution, then
+                      Apple Development.
                       Can also be set with MDVIEWER_SIGNING_IDENTITY.
   --notary-profile    notarytool keychain profile.
                       Can also be set with MDVIEWER_NOTARY_PROFILE.
@@ -81,6 +83,21 @@ require_value() {
     local option="$1"
     local value="${2:-}"
     [[ -n "$value" && "${value:0:1}" != "-" ]] || fail "$option requires a value"
+}
+
+detect_signing_identity() {
+    local identities
+    local identity
+
+    identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+
+    for pattern in "Developer ID Application" "Apple Distribution" "Apple Development"; do
+        identity="$(awk -F'"' -v pattern="$pattern" '$0 ~ pattern { print $2; exit }' <<<"$identities")"
+        if [[ -n "$identity" ]]; then
+            printf '%s\n' "$identity"
+            return
+        fi
+    done
 }
 
 ensure_clean_working_tree() {
@@ -196,7 +213,11 @@ require_command ditto
 
 if [[ "$SIGN_APP" -eq 1 ]]; then
     require_command codesign
-    [[ -n "$SIGNING_IDENTITY" ]] || fail "Missing signing identity. Pass --signing-identity or set MDVIEWER_SIGNING_IDENTITY."
+    require_command security
+    if [[ -z "$SIGNING_IDENTITY" ]]; then
+        SIGNING_IDENTITY="$(detect_signing_identity)"
+    fi
+    [[ -n "$SIGNING_IDENTITY" ]] || fail "Missing signing identity. Install a signing certificate, pass --signing-identity, or set MDVIEWER_SIGNING_IDENTITY."
     [[ -f "$ENTITLEMENTS_PLIST" ]] || fail "Missing entitlements file: $ENTITLEMENTS_PLIST"
 fi
 
@@ -278,7 +299,7 @@ fi
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "Could not find built .app in $PRODUCTS_DIR"
 
 if [[ "$SIGN_APP" -eq 1 ]]; then
-    log "Signing app"
+    log "Signing app with $SIGNING_IDENTITY"
     codesign \
         --force \
         --deep \
