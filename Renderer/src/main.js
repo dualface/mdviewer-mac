@@ -81,17 +81,25 @@ md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 };
 
 window.MDViewer = {
-  render(payload) {
+  async render(payload, renderID) {
     currentPayload = payload;
-    applySettings(payload);
-    if (payload.kind === 'markdown') {
-      renderMarkdown(payload);
-    } else if (payload.kind === 'image') {
-      renderImage(payload);
-    } else if (payload.kind === 'text') {
-      renderText(payload);
-    } else {
-      renderUnsupported(payload);
+    try {
+      applySettings(payload);
+      if (payload.kind === 'markdown') {
+        await renderMarkdown(payload);
+      } else if (payload.kind === 'image') {
+        renderImage(payload);
+      } else if (payload.kind === 'text') {
+        renderText(payload);
+      } else {
+        renderUnsupported(payload);
+      }
+    } catch (error) {
+      postMessage('renderError', error.message);
+      preview.innerHTML = `<div class="error">Render error: ${escapeHtml(error.message)}</div>`;
+    } finally {
+      await waitForPaint();
+      postMessage('renderComplete', { renderID });
     }
   },
 };
@@ -112,14 +120,14 @@ function applySettings(payload) {
   });
 }
 
-function renderMarkdown(payload) {
+async function renderMarkdown(payload) {
   try {
     const html = md.render(payload.markdown || '', { filePath: payload.filePath });
     preview.innerHTML = DOMPurify.sanitize(html, {
       ADD_ATTR: ['target', 'rel', 'data-mdviewer-link'],
     });
     bindLinks(payload.filePath);
-    renderMermaidBlocks();
+    await renderMermaidBlocks();
   } catch (error) {
     postMessage('renderError', error.message);
     preview.innerHTML = `<div class="error">Markdown render error: ${escapeHtml(error.message)}</div>`;
@@ -221,6 +229,12 @@ function normalizePath(path) {
 
 function postMessage(name, body) {
   window.webkit?.messageHandlers?.[name]?.postMessage(body);
+}
+
+function waitForPaint() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
 }
 
 function escapeHtml(text) {

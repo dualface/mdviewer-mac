@@ -101,9 +101,9 @@ Build locally without uploading:
 scripts/release.sh --skip-upload --allow-dirty
 ```
 
-Release artifacts are named as `MarkdownViewer-<version>-YYYYMMDD-HHMMSS-macOS.dmg`. The default version is `0.5`; override it with `--version 0.5.1` or `MDVIEWER_VERSION`.
+Release artifacts are named as `MarkdownViewer-<version>-<build-number>-YYYYMMDD-HHMMSS-macOS.dmg`. The default marketing version is `0.5`; override it with `--version 0.5.1` or `MDVIEWER_VERSION`. The default release tag is `v<version>-<build-number>`.
 
-Useful options include `--version 0.5.1`, `--tag v0.5`, `--repo owner/repo`, `--notes-file RELEASE_NOTES.md`, `--prerelease`, and `--skip-tests`. The script requires a clean working tree by default; pass `--allow-dirty` only for local packaging.
+Useful options include `--version 0.5.1`, `--tag v0.5.1-20260626013209`, `--repo owner/repo`, `--notes-file RELEASE_NOTES.md`, `--prerelease`, and `--skip-tests`. The script requires a clean working tree by default; pass `--allow-dirty` only for local packaging.
 
 ### Signing and Notarization
 

@@ -76,17 +76,23 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func openDocumentURL(_ url: URL) {
+        let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
         var isDirectory: ObjCBool = false
-        FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+        FileManager.default.fileExists(atPath: canonical.path, isDirectory: &isDirectory)
         if isDirectory.boolValue {
             setSidebarVisible(true)
-            openWorkspace(url)
+            openWorkspace(canonical)
             return
         }
 
-        let parent = url.deletingLastPathComponent()
-        setSidebarVisible(!FileTypeDetector.isMarkdown(url))
-        openWorkspace(parent, initialFile: url)
+        if let resolver, resolver.contains(canonical) {
+            openFile(canonical)
+            return
+        }
+
+        let parent = canonical.deletingLastPathComponent()
+        setSidebarVisible(!FileTypeDetector.isMarkdown(canonical))
+        openWorkspace(parent, initialFile: canonical)
     }
 
     func setSidebarVisible(_ isVisible: Bool) {
@@ -160,7 +166,7 @@ final class WorkspaceModel: ObservableObject {
 
         let kind = FileTypeDetector.kind(for: canonical, isDirectory: false)
         let previewKind = FileTypeDetector.previewKind(for: kind)
-        if let existing = tabs.first(where: { $0.url == canonical }) {
+        if let existing = tabs.first(where: { canonicalURL($0.url) == canonical }) {
             selectedTabID = existing.id
             persistWorkspace()
             return
@@ -459,12 +465,16 @@ final class WorkspaceModel: ObservableObject {
     }
 
     private func startAccessing(_ url: URL) {
-        let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
+        let canonical = canonicalURL(url)
         guard !securityScopedURLs.contains(canonical) else {
             return
         }
         if canonical.startAccessingSecurityScopedResource() {
             securityScopedURLs.append(canonical)
         }
+    }
+
+    private func canonicalURL(_ url: URL) -> URL {
+        url.standardizedFileURL.resolvingSymlinksInPath()
     }
 }

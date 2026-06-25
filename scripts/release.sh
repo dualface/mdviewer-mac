@@ -39,7 +39,7 @@ the .app as a DMG file, and publishes it to a GitHub Release with the GitHub CLI
 
 Options:
   --version VERSION    Marketing version. Default: 0.5.
-  --tag TAG            Release tag. Defaults to v<CFBundleShortVersionString>.
+  --tag TAG            Release tag. Defaults to v<version>-<build-number>.
   --repo OWNER/REPO    GitHub repository for gh release commands.
   --remote NAME        Git remote used when pushing a new tag. Default: origin.
   --notes-file PATH    Release notes file. Defaults to GitHub generated notes.
@@ -61,7 +61,7 @@ Options:
 
 Examples:
   scripts/release.sh --draft
-  scripts/release.sh --tag v0.5 --repo dualface/mdviewer-mac
+  scripts/release.sh --tag v0.5-20260626013209 --repo dualface/mdviewer-mac
   scripts/release.sh --skip-upload --allow-dirty
   MDVIEWER_SIGNING_IDENTITY="Developer ID Application: Example, Inc. (TEAMID)" \
     MDVIEWER_NOTARY_PROFILE="mdviewer-notary" \
@@ -296,12 +296,14 @@ BUILD_TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
 BUILD_NUMBER="${BUILD_TIMESTAMP/-/}"
 [[ -n "$VERSION" ]] || fail "Version cannot be empty."
 
+RELEASE_VERSION="$VERSION-$BUILD_NUMBER"
+
 if [[ -z "$TAG" ]]; then
-    TAG="v$VERSION"
+    TAG="v$RELEASE_VERSION"
 fi
 
-ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-$BUILD_TIMESTAMP-macOS.dmg"
-NOTARY_ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-$BUILD_TIMESTAMP-macOS-notary.dmg"
+ASSET_PATH="$DIST_DIR/$APP_NAME-$RELEASE_VERSION-$BUILD_TIMESTAMP-macOS.dmg"
+NOTARY_ASSET_PATH="$DIST_DIR/$APP_NAME-$RELEASE_VERSION-$BUILD_TIMESTAMP-macOS-notary.dmg"
 VERSION_BUILD_SETTINGS=(
     "MARKETING_VERSION=$VERSION"
     "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
@@ -437,6 +439,8 @@ else
 fi
 
 log "Release build complete"
-printf 'Version: %s (%s)\n' "$VERSION" "$BUILD_NUMBER"
+printf 'Version: %s\n' "$RELEASE_VERSION"
+printf 'Marketing Version: %s\n' "$VERSION"
+printf 'Build Number: %s\n' "$BUILD_NUMBER"
 printf 'Tag: %s\n' "$TAG"
 printf 'Artifact: %s\n' "$ASSET_PATH"

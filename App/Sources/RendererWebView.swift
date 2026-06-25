@@ -15,6 +15,7 @@ struct RendererWebView: NSViewRepresentable {
         context.coordinator.schemeHandler = schemeHandler
         configuration.setURLSchemeHandler(schemeHandler, forURLScheme: AssetURLBuilder.scheme)
         configuration.userContentController.add(context.coordinator, name: "rendererReady")
+        configuration.userContentController.add(context.coordinator, name: "renderComplete")
         configuration.userContentController.add(context.coordinator, name: "openLink")
         configuration.userContentController.add(context.coordinator, name: "renderError")
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -23,6 +24,7 @@ struct RendererWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
+        webView.alphaValue = 0
         context.coordinator.webView = webView
 
         if let rendererURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Renderer"),
@@ -50,6 +52,7 @@ struct RendererWebView: NSViewRepresentable {
         var latestPayload: RendererPayload?
         var isReady = false
         private var lastRenderedJSON: String?
+        private var renderID = 0
 
         init(workspace: WorkspaceModel) {
             self.workspace = workspace
@@ -60,6 +63,14 @@ struct RendererWebView: NSViewRepresentable {
             case "rendererReady":
                 isReady = true
                 renderIfReady(force: true)
+            case "renderComplete":
+                guard let body = message.body as? [String: Any],
+                      let completedRenderID = body["renderID"] as? Int,
+                      completedRenderID == renderID
+                else {
+                    return
+                }
+                webView?.alphaValue = 1
             case "openLink":
                 guard let body = message.body as? [String: Any],
                       let href = body["href"] as? String,
@@ -111,6 +122,8 @@ struct RendererWebView: NSViewRepresentable {
                 return
             }
             lastRenderedJSON = json
+            renderID += 1
+            webView.alphaValue = 0
             let encoded = data.base64EncodedString()
             let script = """
             (() => {
@@ -118,7 +131,7 @@ struct RendererWebView: NSViewRepresentable {
               if (!window.MDViewer) {
                 throw new Error('Renderer script did not initialize.');
               }
-              window.MDViewer.render(payload);
+              window.MDViewer.render(payload, \(renderID));
             })();
             """
             webView.evaluateJavaScript(script) { _, error in

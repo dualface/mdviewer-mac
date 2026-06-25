@@ -84,12 +84,14 @@ enum PreviewWidth: String, CaseIterable, Codable, Sendable {
     }
 }
 
+@MainActor
 enum AppStorage {
     private static let workspaceKey = "persistedWorkspace"
     private static let settingsKey = "persistedSettings"
+    static var defaults: UserDefaults = .standard
 
     static func loadWorkspace() -> PersistedWorkspace? {
-        guard let data = UserDefaults.standard.data(forKey: workspaceKey) else {
+        guard let data = defaults.data(forKey: workspaceKey) else {
             return nil
         }
         return try? JSONDecoder().decode(PersistedWorkspace.self, from: data)
@@ -97,16 +99,16 @@ enum AppStorage {
 
     static func saveWorkspace(_ workspace: PersistedWorkspace?) {
         guard let workspace else {
-            UserDefaults.standard.removeObject(forKey: workspaceKey)
+            defaults.removeObject(forKey: workspaceKey)
             return
         }
         if let data = try? JSONEncoder().encode(workspace) {
-            UserDefaults.standard.set(data, forKey: workspaceKey)
+            defaults.set(data, forKey: workspaceKey)
         }
     }
 
     static func loadSettings() -> PersistedSettings {
-        guard let data = UserDefaults.standard.data(forKey: settingsKey),
+        guard let data = defaults.data(forKey: settingsKey),
               let settings = try? JSONDecoder().decode(PersistedSettings.self, from: data)
         else {
             return PersistedSettings()
@@ -116,7 +118,7 @@ enum AppStorage {
 
     static func saveSettings(_ settings: PersistedSettings) {
         if let data = try? JSONEncoder().encode(settings) {
-            UserDefaults.standard.set(data, forKey: settingsKey)
+            defaults.set(data, forKey: settingsKey)
         }
     }
 }

@@ -21,12 +21,18 @@ struct ContentView: View {
                     SidebarResizeHandle(width: $liveSidebarWidth)
                 }
                 VStack(spacing: 0) {
-                    TabBarView()
-                    Divider()
+                    if !workspace.tabs.isEmpty {
+                        TabBarView()
+                        Divider()
+                    }
                     PreviewContainerView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
         .preferredColorScheme(colorScheme)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
@@ -515,7 +521,7 @@ private struct TabBarView: View {
                 }
             }
         }
-        .frame(height: workspace.tabs.isEmpty ? 0 : 34)
+        .frame(height: 34)
     }
 }
 
@@ -566,5 +572,6 @@ private struct PreviewContainerView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
