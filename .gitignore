@@ -12,6 +12,10 @@ DerivedData/
 # Frontend dependencies
 Renderer/node_modules/
 
+# Release artifacts
+.build/
+dist/
+
 # Local logs and archives
 *.log
 *.xcresult
