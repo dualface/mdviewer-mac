@@ -1,0 +1,55 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="background" x1="176" y1="112" x2="856" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F7FAFF"/>
+      <stop offset="0.45" stop-color="#DCEEFF"/>
+      <stop offset="1" stop-color="#7EB6F2"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="238" y1="114" x2="792" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.95"/>
+      <stop offset="0.5" stop-color="#B6D8F8" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#245EAE" stop-opacity="0.58"/>
+    </linearGradient>
+    <linearGradient id="page" x1="288" y1="218" x2="756" y2="822" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.58" stop-color="#F5FAFF"/>
+      <stop offset="1" stop-color="#D9E9F8"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="296" y1="344" x2="742" y2="686" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#18304F"/>
+      <stop offset="1" stop-color="#0A4D89"/>
+    </linearGradient>
+    <filter id="shadow" x="112" y="84" width="800" height="868" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="34" stdDeviation="36" flood-color="#16406D" flood-opacity="0.22"/>
+      <feDropShadow dx="0" dy="4" stdDeviation="10" flood-color="#FFFFFF" flood-opacity="0.72"/>
+    </filter>
+    <filter id="pageShadow" x="218" y="154" width="588" height="744" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="20" stdDeviation="22" flood-color="#123A66" flood-opacity="0.20"/>
+    </filter>
+    <clipPath id="squircle">
+      <path d="M154 512C154 258.9 258.9 154 512 154C765.1 154 870 258.9 870 512C870 765.1 765.1 870 512 870C258.9 870 154 765.1 154 512Z"/>
+    </clipPath>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <path d="M154 512C154 258.9 258.9 154 512 154C765.1 154 870 258.9 870 512C870 765.1 765.1 870 512 870C258.9 870 154 765.1 154 512Z" fill="url(#background)"/>
+    <path d="M154 512C154 258.9 258.9 154 512 154C765.1 154 870 258.9 870 512C870 765.1 765.1 870 512 870C258.9 870 154 765.1 154 512Z" stroke="url(#edge)" stroke-width="6"/>
+    <g clip-path="url(#squircle)">
+      <path d="M220 292C282 194 386 158 520 164C416 193 344 253 302 348C254 455 223 541 176 568C176 462 190 364 220 292Z" fill="white" fill-opacity="0.52"/>
+      <path d="M766 788C682 862 555 884 414 844C554 821 648 762 708 666C766 574 820 554 870 596C858 685 824 749 766 788Z" fill="#2A74C5" fill-opacity="0.18"/>
+    </g>
+  </g>
+
+  <g filter="url(#pageShadow)">
+    <path d="M300 210H642L772 340V798C772 824.5 750.5 846 724 846H300C273.5 846 252 824.5 252 798V258C252 231.5 273.5 210 300 210Z" fill="url(#page)"/>
+    <path d="M642 210V322C642 334.2 651.8 344 664 344H772L642 210Z" fill="#C8E1F7"/>
+    <path d="M642 210V322C642 334.2 651.8 344 664 344H772" stroke="#FFFFFF" stroke-width="10" stroke-linejoin="round"/>
+    <path d="M302 210H642L772 340V798C772 824.5 750.5 846 724 846H300C273.5 846 252 824.5 252 798V260C252 232.4 274.4 210 302 210Z" stroke="white" stroke-opacity="0.84" stroke-width="8"/>
+  </g>
+
+  <g transform="translate(278 364) scale(2.25)">
+    <!-- Markdown Mark by Dustin Curtis, CC0 1.0 Public Domain Dedication. -->
+    <path clip-rule="evenodd" d="M15 10C12.2386 10 10 12.2386 10 15V113C10 115.761 12.2386 118 15 118H193C195.761 118 198 115.761 198 113V15C198 12.2386 195.761 10 193 10H15ZM0 15C0 6.71573 6.71573 0 15 0H193C201.284 0 208 6.71573 208 15V113C208 121.284 201.284 128 193 128H15C6.71573 128 0 121.284 0 113V15Z" fill="url(#mark)" fill-rule="evenodd"/>
+    <path d="M30 98V30H50L70 55L90 30H110V98H90V59L70 84L50 59V98H30ZM155 98L125 65H145V30H165V65H185L155 98Z" fill="url(#mark)"/>
+  </g>
+</svg>
