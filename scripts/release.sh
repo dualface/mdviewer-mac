@@ -6,6 +6,7 @@ SCHEME="MDViewerMac"
 PROJECT_FILE="MDViewerMac.xcodeproj"
 CONFIGURATION="Release"
 DESTINATION="platform=macOS"
+DEFAULT_VERSION="0.5"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="$ROOT_DIR/dist"
@@ -14,7 +15,7 @@ DERIVED_DATA_DIR="$BUILD_DIR/DerivedData"
 INFO_PLIST="$ROOT_DIR/App/Generated/Info.plist"
 ENTITLEMENTS_PLIST="$ROOT_DIR/App/Generated/MDViewerMac.entitlements"
 
-VERSION=""
+VERSION="${MDVIEWER_VERSION:-$DEFAULT_VERSION}"
 TAG=""
 REPO=""
 REMOTE="origin"
@@ -24,7 +25,7 @@ PRERELEASE=0
 SKIP_TESTS=0
 SKIP_UPLOAD=0
 ALLOW_DIRTY=0
-SIGN_APP=0
+SIGN_APP=1
 NOTARIZE_APP=0
 SIGNING_IDENTITY="${MDVIEWER_SIGNING_IDENTITY:-}"
 NOTARY_PROFILE="${MDVIEWER_NOTARY_PROFILE:-}"
@@ -33,10 +34,11 @@ usage() {
     cat <<'EOF'
 Usage: scripts/release.sh [options]
 
-Builds the renderer, builds the macOS app in Release mode, packages the .app
-as a zip file, and publishes it to a GitHub Release with the GitHub CLI.
+Builds the renderer, builds and signs the macOS app in Release mode, packages
+the .app as a DMG file, and publishes it to a GitHub Release with the GitHub CLI.
 
 Options:
+  --version VERSION    Marketing version. Default: 0.5.
   --tag TAG            Release tag. Defaults to v<CFBundleShortVersionString>.
   --repo OWNER/REPO    GitHub repository for gh release commands.
   --remote NAME        Git remote used when pushing a new tag. Default: origin.
@@ -47,6 +49,7 @@ Options:
   --skip-upload       Build and package locally without creating a GitHub release.
   --allow-dirty       Allow releasing with uncommitted working tree changes.
   --sign              Sign the app with an available local certificate.
+  --no-sign           Build without re-signing after xcodebuild.
   --notarize          Notarize and staple the signed app before packaging.
   --signing-identity  Signing identity. If omitted, the script auto-selects
                       Developer ID Application, Apple Distribution, then
@@ -58,7 +61,7 @@ Options:
 
 Examples:
   scripts/release.sh --draft
-  scripts/release.sh --tag v0.1.0 --repo dualface/mdviewer-mac
+  scripts/release.sh --tag v0.5 --repo dualface/mdviewer-mac
   scripts/release.sh --skip-upload --allow-dirty
   MDVIEWER_SIGNING_IDENTITY="Developer ID Application: Example, Inc. (TEAMID)" \
     MDVIEWER_NOTARY_PROFILE="mdviewer-notary" \
@@ -108,8 +111,37 @@ ensure_clean_working_tree() {
     fi
 }
 
+create_dmg() {
+    local app_path="$1"
+    local asset_path="$2"
+    local staging_dir="$BUILD_DIR/dmg-staging"
+
+    rm -rf "$staging_dir"
+    mkdir -p "$staging_dir"
+
+    ditto "$app_path" "$staging_dir/$APP_NAME.app"
+    ln -s /Applications "$staging_dir/Applications"
+
+    rm -f "$asset_path"
+    hdiutil create \
+        -volname "MDViewer $VERSION" \
+        -srcfolder "$staging_dir" \
+        -ov \
+        -format UDZO \
+        "$asset_path"
+}
+
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --version)
+            require_value "$1" "${2:-}"
+            VERSION="$2"
+            shift 2
+            ;;
+        --version=*)
+            VERSION="${1#*=}"
+            shift
+            ;;
         --tag)
             require_value "$1" "${2:-}"
             TAG="$2"
@@ -170,6 +202,10 @@ while [[ $# -gt 0 ]]; do
             SIGN_APP=1
             shift
             ;;
+        --no-sign)
+            SIGN_APP=0
+            shift
+            ;;
         --notarize)
             SIGN_APP=1
             NOTARIZE_APP=1
@@ -210,6 +246,7 @@ require_command npm
 require_command xcodegen
 require_command xcodebuild
 require_command ditto
+require_command hdiutil
 
 if [[ "$SIGN_APP" -eq 1 ]]; then
     require_command codesign
@@ -255,16 +292,20 @@ ensure_clean_working_tree "after renderer build and project generation"
 
 [[ -f "$INFO_PLIST" ]] || fail "Missing generated Info.plist: $INFO_PLIST"
 
-VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
-BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$INFO_PLIST")"
-[[ -n "$VERSION" ]] || fail "Could not read CFBundleShortVersionString from $INFO_PLIST"
+BUILD_TIMESTAMP="$(date +%Y%m%d-%H%M%S)"
+BUILD_NUMBER="${BUILD_TIMESTAMP/-/}"
+[[ -n "$VERSION" ]] || fail "Version cannot be empty."
 
 if [[ -z "$TAG" ]]; then
     TAG="v$VERSION"
 fi
 
-ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-macOS.zip"
-NOTARY_ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-macOS-notary.zip"
+ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-$BUILD_TIMESTAMP-macOS.dmg"
+NOTARY_ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-$BUILD_TIMESTAMP-macOS-notary.dmg"
+VERSION_BUILD_SETTINGS=(
+    "MARKETING_VERSION=$VERSION"
+    "CURRENT_PROJECT_VERSION=$BUILD_NUMBER"
+)
 
 if [[ "$SKIP_TESTS" -eq 0 ]]; then
     log "Running tests"
@@ -272,6 +313,7 @@ if [[ "$SKIP_TESTS" -eq 0 ]]; then
         -project "$PROJECT_FILE" \
         -scheme "$SCHEME" \
         -destination "$DESTINATION" \
+        "${VERSION_BUILD_SETTINGS[@]}" \
         test
 else
     log "Skipping tests"
@@ -287,6 +329,7 @@ xcodebuild \
     -configuration "$CONFIGURATION" \
     -destination "$DESTINATION" \
     -derivedDataPath "$DERIVED_DATA_DIR" \
+    "${VERSION_BUILD_SETTINGS[@]}" \
     clean build
 
 PRODUCTS_DIR="$DERIVED_DATA_DIR/Build/Products/$CONFIGURATION"
@@ -314,8 +357,7 @@ fi
 
 if [[ "$NOTARIZE_APP" -eq 1 ]]; then
     log "Preparing notarization archive"
-    rm -f "$NOTARY_ASSET_PATH"
-    ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$NOTARY_ASSET_PATH"
+    create_dmg "$APP_PATH" "$NOTARY_ASSET_PATH"
 
     log "Submitting app for notarization"
     xcrun notarytool submit "$NOTARY_ASSET_PATH" \
@@ -323,13 +365,16 @@ if [[ "$NOTARIZE_APP" -eq 1 ]]; then
         --wait
 
     log "Stapling notarization ticket"
-    xcrun stapler staple "$APP_PATH"
-    xcrun stapler validate "$APP_PATH"
+    xcrun stapler staple "$NOTARY_ASSET_PATH"
+    xcrun stapler validate "$NOTARY_ASSET_PATH"
 fi
 
-log "Packaging app"
-rm -f "$ASSET_PATH"
-ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$ASSET_PATH"
+log "Creating DMG"
+if [[ "$NOTARIZE_APP" -eq 1 ]]; then
+    mv "$NOTARY_ASSET_PATH" "$ASSET_PATH"
+else
+    create_dmg "$APP_PATH" "$ASSET_PATH"
+fi
 
 ensure_tag_on_head() {
     local head_commit

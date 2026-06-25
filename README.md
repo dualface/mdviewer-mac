@@ -81,7 +81,7 @@ The build output is written to `App/Resources/Renderer` and bundled into the mac
 
 ## Release
 
-Use `scripts/release.sh` to build, package, and publish a GitHub Release. The script installs renderer dependencies with `npm ci`, builds the offline renderer, regenerates the Xcode project, runs XCTest, builds the app in Release mode, packages the `.app` as a zip file, and uploads it with the GitHub CLI.
+Use `scripts/release.sh` to build, sign, package, and publish a GitHub Release. The script installs renderer dependencies with `npm ci`, builds the offline renderer, regenerates the Xcode project, updates the build number, runs XCTest, builds the app in Release mode, packages the `.app` as a `.dmg` file, and uploads it with the GitHub CLI.
 
 Before publishing, authenticate the GitHub CLI:
 
@@ -101,19 +101,21 @@ Build locally without uploading:
 scripts/release.sh --skip-upload --allow-dirty
 ```
 
-Useful options include `--tag v0.1.0`, `--repo owner/repo`, `--notes-file RELEASE_NOTES.md`, `--prerelease`, and `--skip-tests`. The script requires a clean working tree by default; pass `--allow-dirty` only for local packaging.
+Release artifacts are named as `MDViewerMac-<version>-YYYYMMDD-HHMMSS-macOS.dmg`. The default version is `0.5`; override it with `--version 0.5.1` or `MDVIEWER_VERSION`.
+
+Useful options include `--version 0.5.1`, `--tag v0.5`, `--repo owner/repo`, `--notes-file RELEASE_NOTES.md`, `--prerelease`, and `--skip-tests`. The script requires a clean working tree by default; pass `--allow-dirty` only for local packaging.
 
 ### Signing and Notarization
 
 Release signing is configured from local arguments, Keychain identities, or environment variables only. Do not commit certificate names, Team IDs, Apple IDs, app-specific passwords, API keys, or notary profiles.
 
-Build a locally signed release without uploading:
+Build a locally signed DMG without uploading:
 
 ```bash
 scripts/release.sh --sign --skip-upload
 ```
 
-When no explicit identity is provided, the script auto-selects the first available identity in this order: `Developer ID Application`, `Apple Distribution`, then `Apple Development`.
+Signing is enabled by default. When no explicit identity is provided, the script auto-selects the first available identity in this order: `Developer ID Application`, `Apple Distribution`, then `Apple Development`. Use `--no-sign` only for local unsigned diagnostics.
 
 Store notarization credentials in the local Keychain:
 
