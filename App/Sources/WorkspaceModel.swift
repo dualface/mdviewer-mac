@@ -79,12 +79,23 @@ final class WorkspaceModel: ObservableObject {
         var isDirectory: ObjCBool = false
         FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
         if isDirectory.boolValue {
+            setSidebarVisible(true)
             openWorkspace(url)
             return
         }
 
         let parent = url.deletingLastPathComponent()
+        setSidebarVisible(!FileTypeDetector.isMarkdown(url))
         openWorkspace(parent, initialFile: url)
+    }
+
+    func setSidebarVisible(_ isVisible: Bool) {
+        guard settings.isSidebarVisible != isVisible else {
+            return
+        }
+        var updated = settings
+        updated.isSidebarVisible = isVisible
+        settings = updated
     }
 
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
@@ -210,6 +221,24 @@ final class WorkspaceModel: ObservableObject {
         persistWorkspace()
     }
 
+    func closeAllTabs() {
+        guard !tabs.isEmpty else {
+            return
+        }
+        tabs = []
+        selectedTabID = nil
+        persistWorkspace()
+    }
+
+    func closeOtherTabs() {
+        guard let selectedTab else {
+            return
+        }
+        tabs = [selectedTab]
+        selectedTabID = selectedTab.id
+        persistWorkspace()
+    }
+
     func refreshSelectedTab() {
         guard let selectedTabID else {
             return
@@ -279,6 +308,7 @@ final class WorkspaceModel: ObservableObject {
                 size: Int64(values.fileSize ?? 0),
                 theme: theme,
                 fontSize: settings.fontSize,
+                fontFamily: settings.rendererFontFamily,
                 previewWidth: settings.previewWidth
             )
         case .image:
@@ -294,6 +324,7 @@ final class WorkspaceModel: ObservableObject {
                 size: Int64(values.fileSize ?? 0),
                 theme: theme,
                 fontSize: settings.fontSize,
+                fontFamily: settings.rendererFontFamily,
                 previewWidth: settings.previewWidth
             )
         case .text:
@@ -310,6 +341,7 @@ final class WorkspaceModel: ObservableObject {
                 size: Int64(values.fileSize ?? 0),
                 theme: theme,
                 fontSize: settings.fontSize,
+                fontFamily: settings.rendererFontFamily,
                 previewWidth: settings.previewWidth
             )
         case .unsupported:
@@ -325,6 +357,7 @@ final class WorkspaceModel: ObservableObject {
                 size: Int64(values.fileSize ?? 0),
                 theme: theme,
                 fontSize: settings.fontSize,
+                fontFamily: settings.rendererFontFamily,
                 previewWidth: settings.previewWidth
             )
         }
@@ -337,6 +370,7 @@ final class WorkspaceModel: ObservableObject {
             }
             payload.theme = resolvedThemeName()
             payload.fontSize = settings.fontSize
+            payload.fontFamily = settings.rendererFontFamily
             payload.previewWidth = settings.previewWidth
             tabs[idx].payload = payload
         }

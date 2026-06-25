@@ -36,6 +36,20 @@ struct MDViewerMacApp: App {
                 }
                 .keyboardShortcut("r", modifiers: [.command])
             }
+
+            CommandMenu("Tabs") {
+                Button("Close Other Files") {
+                    workspace.closeOtherTabs()
+                }
+                .keyboardShortcut("w", modifiers: [.command, .option])
+                .disabled(workspace.selectedTab == nil || workspace.tabs.count <= 1)
+
+                Button("Close All Files") {
+                    workspace.closeAllTabs()
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .disabled(workspace.tabs.isEmpty)
+            }
         }
     }
 }

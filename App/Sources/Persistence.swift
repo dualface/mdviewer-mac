@@ -10,8 +10,52 @@ struct PersistedWorkspace: Codable, Sendable {
 struct PersistedSettings: Codable, Sendable {
     var theme: AppTheme = .system
     var fontSize: Double = 16
+    var fontFamily: String = FontFamily.systemID
     var previewWidth: PreviewWidth = .medium
     var sidebarWidth: Double = 260
+    var isSidebarVisible: Bool = true
+
+    init() {}
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        theme = try container.decodeIfPresent(AppTheme.self, forKey: .theme) ?? .system
+        fontSize = try container.decodeIfPresent(Double.self, forKey: .fontSize) ?? 16
+        fontFamily = try container.decodeIfPresent(String.self, forKey: .fontFamily) ?? FontFamily.systemID
+        previewWidth = try container.decodeIfPresent(PreviewWidth.self, forKey: .previewWidth) ?? .medium
+        sidebarWidth = try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? 260
+        isSidebarVisible = try container.decodeIfPresent(Bool.self, forKey: .isSidebarVisible) ?? true
+    }
+
+    var rendererFontFamily: String {
+        FontFamily.cssFamily(for: fontFamily)
+    }
+}
+
+enum FontFamily {
+    static let systemID = "__system"
+    static let serifID = "__serif"
+    static let monospaceID = "__monospace"
+
+    static func cssFamily(for id: String) -> String {
+        switch id {
+        case systemID:
+            return "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif"
+        case serifID:
+            return "'New York', Georgia, ui-serif, serif"
+        case monospaceID:
+            return "'SF Mono', Menlo, Monaco, Consolas, monospace"
+        default:
+            return "\(quotedCSSFamily(id)), -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif"
+        }
+    }
+
+    private static func quotedCSSFamily(_ family: String) -> String {
+        let escaped = family
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "'", with: "\\'")
+        return "'\(escaped)'"
+    }
 }
 
 enum AppTheme: String, CaseIterable, Codable, Sendable {

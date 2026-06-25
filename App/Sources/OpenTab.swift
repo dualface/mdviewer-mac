@@ -28,5 +28,6 @@ struct RendererPayload: Codable, Equatable, Sendable {
     var size: Int64
     var theme: String
     var fontSize: Double
+    var fontFamily: String
     var previewWidth: PreviewWidth
 }

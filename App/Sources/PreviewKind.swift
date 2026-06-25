@@ -81,6 +81,10 @@ enum FileTypeDetector {
         }
     }
 
+    static func isMarkdown(_ url: URL) -> Bool {
+        markdownExtensions.contains(url.pathExtension.lowercased())
+    }
+
     static func isHidden(_ url: URL) -> Bool {
         url.lastPathComponent.hasPrefix(".")
     }

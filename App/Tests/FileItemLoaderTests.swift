@@ -13,6 +13,7 @@ final class FileItemLoaderTests: XCTestCase {
         try "# Title".write(to: tempRoot.appendingPathComponent("readme.md"), atomically: true, encoding: .utf8)
         try "{}".write(to: tempRoot.appendingPathComponent("config.json"), atomically: true, encoding: .utf8)
         try "hidden".write(to: tempRoot.appendingPathComponent(".hidden.md"), atomically: true, encoding: .utf8)
+        try Data().write(to: tempRoot.appendingPathComponent("image.png"))
     }
 
     override func tearDownWithError() throws {
@@ -26,5 +27,6 @@ final class FileItemLoaderTests: XCTestCase {
         XCTAssertEqual(children[0].kind, .directory)
         XCTAssertEqual(children[2].kind, .text)
         XCTAssertEqual(children[3].kind, .markdown)
+        XCTAssertFalse(children.contains { $0.name == "image.png" })
     }
 }

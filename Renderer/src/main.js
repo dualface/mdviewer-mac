@@ -104,6 +104,7 @@ function applySettings(payload) {
   document.documentElement.dataset.theme = payload.theme || 'light';
   preview.className = `width-${payload.previewWidth || 'medium'}`;
   preview.style.setProperty('--font-size', `${payload.fontSize || 16}px`);
+  preview.style.setProperty('--content-font-family', payload.fontFamily || "-apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, sans-serif");
   mermaid.initialize({
     startOnLoad: false,
     securityLevel: 'strict',

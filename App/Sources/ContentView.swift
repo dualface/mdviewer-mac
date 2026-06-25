@@ -1,17 +1,25 @@
+import AppKit
 import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
+    @State private var liveSidebarWidth: Double?
+
+    private var sidebarWidth: Double {
+        liveSidebarWidth ?? workspace.settings.sidebarWidth
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             ToolbarView()
             Divider()
             HStack(spacing: 0) {
-                SidebarView()
-                    .frame(width: workspace.settings.sidebarWidth)
-                    .background(Color(nsColor: .controlBackgroundColor))
-                SidebarResizeHandle()
+                if workspace.settings.isSidebarVisible {
+                    SidebarView()
+                        .frame(width: sidebarWidth)
+                        .background(Color(nsColor: .controlBackgroundColor))
+                    SidebarResizeHandle(width: $liveSidebarWidth)
+                }
                 VStack(spacing: 0) {
                     TabBarView()
                     Divider()
@@ -61,26 +69,95 @@ struct ContentView: View {
 }
 
 private struct SidebarResizeHandle: View {
-    @EnvironmentObject private var workspace: WorkspaceModel
+    @Binding var width: Double?
 
     var body: some View {
-        Rectangle()
-            .fill(Color(nsColor: .separatorColor))
-            .frame(width: 1)
-            .overlay {
-                Rectangle()
-                    .fill(Color.clear)
-                    .frame(width: 8)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                var settings = workspace.settings
-                                settings.sidebarWidth = min(520, max(180, settings.sidebarWidth + value.translation.width))
-                                workspace.settings = settings
-                            }
-                    )
-            }
+        AppKitSidebarResizeHandle(width: $width)
+            .frame(width: 28)
+    }
+}
+
+private struct AppKitSidebarResizeHandle: NSViewRepresentable {
+    @EnvironmentObject private var workspace: WorkspaceModel
+    @Binding var width: Double?
+
+    func makeNSView(context: Context) -> SidebarResizeHandleView {
+        SidebarResizeHandleView()
+    }
+
+    func updateNSView(_ view: SidebarResizeHandleView, context: Context) {
+        view.baseWidth = workspace.settings.sidebarWidth
+        view.onResize = { newWidth in
+            width = newWidth
+        }
+        view.onCommit = { newWidth in
+            var settings = workspace.settings
+            settings.sidebarWidth = newWidth
+            workspace.settings = settings
+            width = nil
+        }
+        view.needsDisplay = true
+    }
+}
+
+private final class SidebarResizeHandleView: NSView {
+    var baseWidth = 260.0
+    var onResize: ((Double) -> Void)?
+    var onCommit: ((Double) -> Void)?
+
+    private let minWidth = 180.0
+    private let maxWidth = 580.0
+    private var dragStartX: CGFloat?
+    private var dragStartWidth: Double?
+
+    override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .resizeLeftRight)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        window?.makeFirstResponder(self)
+        dragStartX = event.locationInWindow.x
+        dragStartWidth = baseWidth
+        NSCursor.resizeLeftRight.set()
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        guard let dragStartX, let dragStartWidth else {
+            return
+        }
+        let newWidth = resizedWidth(startX: dragStartX, startWidth: dragStartWidth, event: event)
+        onResize?(newWidth)
+        NSCursor.resizeLeftRight.set()
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard let dragStartX, let dragStartWidth else {
+            return
+        }
+        let newWidth = resizedWidth(startX: dragStartX, startWidth: dragStartWidth, event: event)
+        self.dragStartX = nil
+        self.dragStartWidth = nil
+        onCommit?(newWidth)
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        NSColor.separatorColor.setFill()
+        NSRect(x: floor(bounds.midX), y: 0, width: 1, height: bounds.height).fill()
+    }
+
+    private func resizedWidth(startX: CGFloat, startWidth: Double, event: NSEvent) -> Double {
+        let delta = event.locationInWindow.x - startX
+        let proposedWidth = startWidth + Double(delta)
+        return min(maxWidth, max(minWidth, proposedWidth.rounded()))
     }
 }
 
@@ -89,6 +166,16 @@ private struct ToolbarView: View {
 
     var body: some View {
         HStack(spacing: 10) {
+            Button {
+                var settings = workspace.settings
+                settings.isSidebarVisible.toggle()
+                workspace.settings = settings
+            } label: {
+                Label("Toggle Sidebar", systemImage: workspace.settings.isSidebarVisible ? "sidebar.left" : "sidebar.left")
+            }
+            .labelStyle(.iconOnly)
+            .help(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar")
+
             Button {
                 workspace.openDirectoryPanel()
             } label: {
@@ -138,12 +225,23 @@ private struct ToolbarView: View {
             .frame(width: 260)
             .help("Preview Width")
 
-            Stepper(value: settingsBinding(\.fontSize), in: 12...28, step: 1) {
-                Text("\(Int(workspace.settings.fontSize))px")
-                    .monospacedDigit()
-                    .frame(width: 42, alignment: .trailing)
+            Picker("Font Size", selection: settingsBinding(\.fontSize)) {
+                ForEach(fontSizes, id: \.self) { size in
+                    Text("\(Int(size))px").tag(size)
+                }
             }
+            .labelsHidden()
+            .frame(width: 82)
             .help("Font Size")
+
+            Picker("Font", selection: settingsBinding(\.fontFamily)) {
+                ForEach(fontOptions, id: \.id) { option in
+                    Text(option.name).tag(option.id)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 150)
+            .help("Font")
 
             Picker("Theme", selection: settingsBinding(\.theme)) {
                 Text("System").tag(AppTheme.system)
@@ -158,6 +256,22 @@ private struct ToolbarView: View {
         .frame(height: 42)
     }
 
+    private var fontSizes: [Double] {
+        [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28]
+    }
+
+    private var fontOptions: [FontOption] {
+        [
+            FontOption(id: FontFamily.systemID, name: "System"),
+            FontOption(id: FontFamily.serifID, name: "Serif"),
+            FontOption(id: FontFamily.monospaceID, name: "Mono"),
+            FontOption(id: "Avenir Next", name: "Avenir Next"),
+            FontOption(id: "Georgia", name: "Georgia"),
+            FontOption(id: "Helvetica Neue", name: "Helvetica"),
+            FontOption(id: "Menlo", name: "Menlo")
+        ]
+    }
+
     private func settingsBinding<Value>(_ keyPath: WritableKeyPath<PersistedSettings, Value>) -> Binding<Value> {
         Binding {
             workspace.settings[keyPath: keyPath]
@@ -167,6 +281,11 @@ private struct ToolbarView: View {
             workspace.settings = settings
         }
     }
+}
+
+private struct FontOption: Hashable {
+    let id: String
+    let name: String
 }
 
 private struct SidebarView: View {
