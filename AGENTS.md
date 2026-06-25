@@ -1,5 +1,9 @@
 # Repository Guidelines
 
+## Project Rules
+
+Use English by default for source code, comments, documentation, commit messages, release notes, and issue or pull request text. Commit changes immediately after completing them, and keep each commit message to exactly one sentence.
+
 ## Project Structure & Module Organization
 
 This repository contains a native macOS Markdown viewer. Swift app code lives in `App/Sources`, with focused files such as `WorkspaceModel.swift`, `RendererWebView.swift`, and `PathResolver.swift`. Unit tests live in `App/Tests`. App metadata and entitlements are generated into `App/Generated` from `project.yml`. Bundled app assets are under `App/Resources`, including the generated offline renderer bundle at `App/Resources/Renderer`.
@@ -26,7 +30,7 @@ Tests use XCTest and are located in `App/Tests`. Name test files after the type 
 
 ## Commit & Pull Request Guidelines
 
-This repository currently has no commit history, so no project-specific commit convention is established. Use short imperative commit messages such as `Add renderer link handling tests`. Pull requests should include a concise summary, test results, and screenshots or screen recordings for visible UI changes. Link related issues when available and mention any generated files, especially updates to `MDViewerMac.xcodeproj` or `App/Resources/Renderer`.
+Use short imperative commit messages, such as `Add renderer link handling tests`, and keep each message to one sentence. Pull requests should include a concise summary, test results, and screenshots or screen recordings for visible UI changes. Link related issues when available and mention any generated files, especially updates to `MDViewerMac.xcodeproj` or `App/Resources/Renderer`.
 
 ## Security & Configuration Tips
 
