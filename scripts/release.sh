@@ -12,6 +12,7 @@ DIST_DIR="$ROOT_DIR/dist"
 BUILD_DIR="$ROOT_DIR/.build/release"
 DERIVED_DATA_DIR="$BUILD_DIR/DerivedData"
 INFO_PLIST="$ROOT_DIR/App/Generated/Info.plist"
+ENTITLEMENTS_PLIST="$ROOT_DIR/App/Generated/MDViewerMac.entitlements"
 
 VERSION=""
 TAG=""
@@ -23,6 +24,10 @@ PRERELEASE=0
 SKIP_TESTS=0
 SKIP_UPLOAD=0
 ALLOW_DIRTY=0
+SIGN_APP=0
+NOTARIZE_APP=0
+SIGNING_IDENTITY="${MDVIEWER_SIGNING_IDENTITY:-}"
+NOTARY_PROFILE="${MDVIEWER_NOTARY_PROFILE:-}"
 
 usage() {
     cat <<'EOF'
@@ -41,12 +46,21 @@ Options:
   --skip-tests        Skip the XCTest step.
   --skip-upload       Build and package locally without creating a GitHub release.
   --allow-dirty       Allow releasing with uncommitted working tree changes.
+  --sign              Sign the app with a Developer ID Application certificate.
+  --notarize          Notarize and staple the signed app before packaging.
+  --signing-identity  Developer ID Application signing identity.
+                      Can also be set with MDVIEWER_SIGNING_IDENTITY.
+  --notary-profile    notarytool keychain profile.
+                      Can also be set with MDVIEWER_NOTARY_PROFILE.
   -h, --help          Show this help message.
 
 Examples:
   scripts/release.sh --draft
   scripts/release.sh --tag v0.1.0 --repo dualface/mdviewer-mac
   scripts/release.sh --skip-upload --allow-dirty
+  MDVIEWER_SIGNING_IDENTITY="Developer ID Application: Example, Inc. (TEAMID)" \
+    MDVIEWER_NOTARY_PROFILE="mdviewer-notary" \
+    scripts/release.sh --sign --notarize
 EOF
 }
 
@@ -135,6 +149,33 @@ while [[ $# -gt 0 ]]; do
             ALLOW_DIRTY=1
             shift
             ;;
+        --sign)
+            SIGN_APP=1
+            shift
+            ;;
+        --notarize)
+            SIGN_APP=1
+            NOTARIZE_APP=1
+            shift
+            ;;
+        --signing-identity)
+            require_value "$1" "${2:-}"
+            SIGNING_IDENTITY="$2"
+            shift 2
+            ;;
+        --signing-identity=*)
+            SIGNING_IDENTITY="${1#*=}"
+            shift
+            ;;
+        --notary-profile)
+            require_value "$1" "${2:-}"
+            NOTARY_PROFILE="$2"
+            shift 2
+            ;;
+        --notary-profile=*)
+            NOTARY_PROFILE="${1#*=}"
+            shift
+            ;;
         -h|--help)
             usage
             exit 0
@@ -152,6 +193,17 @@ require_command npm
 require_command xcodegen
 require_command xcodebuild
 require_command ditto
+
+if [[ "$SIGN_APP" -eq 1 ]]; then
+    require_command codesign
+    [[ -n "$SIGNING_IDENTITY" ]] || fail "Missing signing identity. Pass --signing-identity or set MDVIEWER_SIGNING_IDENTITY."
+    [[ -f "$ENTITLEMENTS_PLIST" ]] || fail "Missing entitlements file: $ENTITLEMENTS_PLIST"
+fi
+
+if [[ "$NOTARIZE_APP" -eq 1 ]]; then
+    require_command xcrun
+    [[ -n "$NOTARY_PROFILE" ]] || fail "Missing notary profile. Pass --notary-profile or set MDVIEWER_NOTARY_PROFILE."
+fi
 
 if [[ "$SKIP_UPLOAD" -eq 0 ]]; then
     require_command gh
@@ -191,6 +243,7 @@ if [[ -z "$TAG" ]]; then
 fi
 
 ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-macOS.zip"
+NOTARY_ASSET_PATH="$DIST_DIR/$APP_NAME-$VERSION-macOS-notary.zip"
 
 if [[ "$SKIP_TESTS" -eq 0 ]]; then
     log "Running tests"
@@ -223,6 +276,35 @@ if [[ ! -d "$APP_PATH" ]]; then
 fi
 
 [[ -n "$APP_PATH" && -d "$APP_PATH" ]] || fail "Could not find built .app in $PRODUCTS_DIR"
+
+if [[ "$SIGN_APP" -eq 1 ]]; then
+    log "Signing app"
+    codesign \
+        --force \
+        --deep \
+        --entitlements "$ENTITLEMENTS_PLIST" \
+        --options runtime \
+        --timestamp \
+        --sign "$SIGNING_IDENTITY" \
+        "$APP_PATH"
+
+    codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+fi
+
+if [[ "$NOTARIZE_APP" -eq 1 ]]; then
+    log "Preparing notarization archive"
+    rm -f "$NOTARY_ASSET_PATH"
+    ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "$NOTARY_ASSET_PATH"
+
+    log "Submitting app for notarization"
+    xcrun notarytool submit "$NOTARY_ASSET_PATH" \
+        --keychain-profile "$NOTARY_PROFILE" \
+        --wait
+
+    log "Stapling notarization ticket"
+    xcrun stapler staple "$APP_PATH"
+    xcrun stapler validate "$APP_PATH"
+fi
 
 log "Packaging app"
 rm -f "$ASSET_PATH"

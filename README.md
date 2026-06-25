@@ -103,6 +103,26 @@ scripts/release.sh --skip-upload --allow-dirty
 
 Useful options include `--tag v0.1.0`, `--repo owner/repo`, `--notes-file RELEASE_NOTES.md`, `--prerelease`, and `--skip-tests`. The script requires a clean working tree by default; pass `--allow-dirty` only for local packaging.
 
+### Signing and Notarization
+
+Release signing is configured from local arguments or environment variables only. Do not commit certificate names, Team IDs, Apple IDs, app-specific passwords, API keys, or notary profiles.
+
+Store notarization credentials in the local Keychain:
+
+```bash
+xcrun notarytool store-credentials mdviewer-notary
+```
+
+Build a signed and notarized release:
+
+```bash
+MDVIEWER_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+MDVIEWER_NOTARY_PROFILE="mdviewer-notary" \
+scripts/release.sh --sign --notarize
+```
+
+For a signed build without notarization, omit `--notarize`. The signing identity can also be passed with `--signing-identity`, and the notary profile can be passed with `--notary-profile`.
+
 ## Sandbox and File Access
 
 The app uses macOS App Sandbox. File access depends on user-selected files or directories and app-scoped bookmarks. Keep the read-only access model intact when changing file handling, and avoid adding broad filesystem permissions without documenting the reason.
