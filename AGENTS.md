@@ -2,7 +2,7 @@
 
 ## Project Rules
 
-Use English by default for source code, comments, documentation, commit messages, release notes, and issue or pull request text. Commit changes immediately after completing them, and keep each commit message to exactly one sentence.
+Use English by default for source code, comments, documentation, commit messages, release notes, and issue or pull request text. Commit changes immediately after completing them, keep each commit message to exactly one sentence, and push every successful commit to the configured remote immediately.
 
 ## Project Structure & Module Organization
 
