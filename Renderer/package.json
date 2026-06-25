@@ -1,0 +1,23 @@
+{
+  "name": "mdviewer-renderer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build --emptyOutDir && node scripts/fix-html.mjs"
+  },
+  "dependencies": {
+    "@vscode/markdown-it-katex": "^1.1.1",
+    "dompurify": "^3.2.6",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.22",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "markdown-it-deflist": "^3.0.0",
+    "markdown-it-footnote": "^4.0.0",
+    "markdown-it-task-lists": "^2.1.1",
+    "mermaid": "^11.6.0",
+    "vite": "^6.3.5"
+  },
+  "devDependencies": {}
+}

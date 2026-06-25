@@ -1,0 +1,17 @@
+.DS_Store
+.memsearch/
+.code-review-graph/
+
+# Xcode
+DerivedData/
+*.xcuserstate
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+
+# Frontend dependencies
+Renderer/node_modules/
+
+# Local logs and archives
+*.log
+*.xcresult
