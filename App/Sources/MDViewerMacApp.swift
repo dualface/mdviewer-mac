@@ -6,15 +6,12 @@ struct MDViewerMacApp: App {
     @StateObject private var workspace = WorkspaceModel()
 
     var body: some Scene {
-        WindowGroup {
+        Window("MarkdownViewer", id: "main") {
             ContentView()
                 .environmentObject(workspace)
                 .frame(minWidth: 980, minHeight: 640)
                 .onAppear {
                     appDelegate.attach(workspace)
-                }
-                .onOpenURL { url in
-                    workspace.openExternalDocumentURL(url)
                 }
         }
         .commands {
@@ -76,6 +73,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             openDocumentURLs([URL(fileURLWithPath: filename)])
         }
         return true
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        true
     }
 
     @MainActor
