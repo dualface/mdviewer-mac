@@ -173,9 +173,7 @@ private struct ToolbarView: View {
     var body: some View {
         HStack(spacing: 10) {
             Button {
-                var settings = workspace.settings
-                settings.isSidebarVisible.toggle()
-                workspace.settings = settings
+                workspace.setSidebarVisible(!workspace.settings.isSidebarVisible)
             } label: {
                 Label("Toggle Sidebar", systemImage: workspace.settings.isSidebarVisible ? "sidebar.left" : "sidebar.left")
             }
@@ -311,7 +309,6 @@ private struct SidebarView: View {
                                 size: 0
                             ),
                             level: 0,
-                            startsExpanded: true,
                             initialChildren: workspace.rootChildren
                         )
                         .id(rootURL)
@@ -348,19 +345,19 @@ private struct DirectoryNodeView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
     let item: FileItem
     let level: Int
-    let startsExpanded: Bool
     let initialChildren: [FileItem]?
-    @State private var isExpanded: Bool
     @State private var children: [FileItem]?
     @State private var isLoading = false
 
-    init(item: FileItem, level: Int, startsExpanded: Bool = false, initialChildren: [FileItem]? = nil) {
+    init(item: FileItem, level: Int, initialChildren: [FileItem]? = nil) {
         self.item = item
         self.level = level
-        self.startsExpanded = startsExpanded
         self.initialChildren = initialChildren
-        _isExpanded = State(initialValue: startsExpanded)
         _children = State(initialValue: initialChildren)
+    }
+
+    private var isExpanded: Bool {
+        workspace.isDirectoryExpanded(item.url)
     }
 
     var body: some View {
@@ -394,8 +391,13 @@ private struct DirectoryNodeView: View {
                 }
             }
         }
+        .task(id: isExpanded) {
+            guard isExpanded else {
+                return
+            }
+            await loadChildrenIfNeeded()
+        }
         .onChange(of: item.url) {
-            isExpanded = startsExpanded
             children = initialChildren
         }
         .onChange(of: initialChildren) {
@@ -407,16 +409,24 @@ private struct DirectoryNodeView: View {
     }
 
     private func toggle() {
-        isExpanded.toggle()
-        guard isExpanded, children == nil else {
+        let shouldLoadChildren = !isExpanded && children == nil
+        workspace.toggleDirectoryExpansion(item.url)
+        guard shouldLoadChildren else {
+            return
+        }
+        Task {
+            await loadChildrenIfNeeded()
+        }
+    }
+
+    private func loadChildrenIfNeeded() async {
+        guard children == nil, !isLoading else {
             return
         }
         isLoading = true
-        Task {
-            let loaded = await workspace.children(of: item.url)
-            children = loaded
-            isLoading = false
-        }
+        let loaded = await workspace.children(of: item.url)
+        children = loaded
+        isLoading = false
     }
 }
 

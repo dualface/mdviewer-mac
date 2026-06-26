@@ -120,4 +120,49 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Nested")
         XCTAssertFalse(model.settings.isSidebarVisible)
     }
+
+    func testOpeningDocumentExpandsContainingDirectoryChain() throws {
+        let model = WorkspaceModel()
+        let firstLevel = tempRoot.appendingPathComponent("first", isDirectory: true)
+        let secondLevel = firstLevel.appendingPathComponent("second", isDirectory: true)
+        let nested = secondLevel.appendingPathComponent("nested.md")
+        try FileManager.default.createDirectory(at: secondLevel, withIntermediateDirectories: true)
+        try "# Nested".write(to: nested, atomically: true, encoding: .utf8)
+
+        model.openWorkspace(tempRoot)
+        model.openFile(nested)
+
+        XCTAssertTrue(model.isDirectoryExpanded(tempRoot))
+        XCTAssertTrue(model.isDirectoryExpanded(firstLevel))
+        XCTAssertTrue(model.isDirectoryExpanded(secondLevel))
+    }
+
+    func testSidebarExpansionStateSurvivesVisibilityToggle() throws {
+        let model = WorkspaceModel()
+        let manualDirectory = tempRoot.appendingPathComponent("manual", isDirectory: true)
+        try FileManager.default.createDirectory(at: manualDirectory, withIntermediateDirectories: true)
+
+        model.openWorkspace(tempRoot)
+        model.expandDirectory(manualDirectory)
+        model.setSidebarVisible(false)
+        model.setSidebarVisible(true)
+
+        XCTAssertTrue(model.isDirectoryExpanded(manualDirectory))
+    }
+
+    func testShowingSidebarExpandsSelectedDocumentDirectory() throws {
+        let model = WorkspaceModel()
+        let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)
+        let nested = childDirectory.appendingPathComponent("nested.md")
+        try FileManager.default.createDirectory(at: childDirectory, withIntermediateDirectories: true)
+        try "# Nested".write(to: nested, atomically: true, encoding: .utf8)
+
+        model.openWorkspace(tempRoot)
+        model.setSidebarVisible(false)
+        model.openFile(nested)
+        model.collapseDirectory(childDirectory)
+        model.setSidebarVisible(true)
+
+        XCTAssertTrue(model.isDirectoryExpanded(childDirectory))
+    }
 }

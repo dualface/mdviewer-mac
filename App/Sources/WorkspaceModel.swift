@@ -27,14 +27,19 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var rootURL: URL?
     @Published var rootChildren: [FileItem] = []
     @Published var tabs: [OpenTab] = []
+    @Published private(set) var expandedDirectoryURLs: Set<URL> = []
     @Published var selectedTabID: OpenTab.ID? {
         didSet {
+            expandSelectedDocumentDirectory()
             updateSelectedDocumentMonitor()
             persistWorkspace()
         }
     }
     @Published var settings: PersistedSettings {
         didSet {
+            if !oldValue.isSidebarVisible && settings.isSidebarVisible {
+                expandSelectedDocumentDirectory()
+            }
             AppStorage.saveSettings(settings)
             updatePayloadSettings()
         }
@@ -128,6 +133,9 @@ final class WorkspaceModel: ObservableObject {
 
     func setSidebarVisible(_ isVisible: Bool) {
         guard settings.isSidebarVisible != isVisible else {
+            if isVisible {
+                expandSelectedDocumentDirectory()
+            }
             return
         }
         var updated = settings
@@ -145,6 +153,7 @@ final class WorkspaceModel: ObservableObject {
         if let canonicalInitialFile {
             startAccessing(canonicalInitialFile)
         }
+        expandedDirectoryURLs = [canonical]
         rootURL = canonical
         initialWorkspaceFile = canonicalInitialFile
         statusMessage = nil
@@ -182,6 +191,39 @@ final class WorkspaceModel: ObservableObject {
             return try FileItemLoader.children(of: directoryURL)
         } catch {
             return []
+        }
+    }
+
+    func isDirectoryExpanded(_ url: URL) -> Bool {
+        expandedDirectoryURLs.contains(canonicalURL(url))
+    }
+
+    func expandDirectory(_ url: URL) {
+        guard canTrackDirectory(url) else {
+            return
+        }
+        let canonical = canonicalURL(url)
+        var updated = expandedDirectoryURLs
+        guard updated.insert(canonical).inserted else {
+            return
+        }
+        expandedDirectoryURLs = updated
+    }
+
+    func collapseDirectory(_ url: URL) {
+        let canonical = canonicalURL(url)
+        var updated = expandedDirectoryURLs
+        guard updated.remove(canonical) != nil else {
+            return
+        }
+        expandedDirectoryURLs = updated
+    }
+
+    func toggleDirectoryExpansion(_ url: URL) {
+        if isDirectoryExpanded(url) {
+            collapseDirectory(url)
+        } else {
+            expandDirectory(url)
         }
     }
 
@@ -317,6 +359,7 @@ final class WorkspaceModel: ObservableObject {
         initialWorkspaceFile = nil
         rootChildren = []
         tabs = []
+        expandedDirectoryURLs = []
         selectedTabID = nil
         statusMessage = nil
         AppStorage.saveWorkspace(nil)
@@ -512,6 +555,44 @@ final class WorkspaceModel: ObservableObject {
 
     private func canonicalURL(_ url: URL) -> URL {
         url.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    private func canTrackDirectory(_ url: URL) -> Bool {
+        guard let rootURL else {
+            return false
+        }
+        return PathResolver(rootURL: rootURL).contains(canonicalURL(url))
+    }
+
+    private func expandSelectedDocumentDirectory() {
+        guard let rootURL,
+              let selectedTab
+        else {
+            return
+        }
+
+        let root = canonicalURL(rootURL)
+        let resolver = PathResolver(rootURL: root)
+        var updated = expandedDirectoryURLs
+        updated.insert(root)
+
+        var directoryURL = canonicalURL(selectedTab.url).deletingLastPathComponent()
+        while resolver.contains(directoryURL) {
+            updated.insert(directoryURL)
+            guard directoryURL.path != root.path else {
+                break
+            }
+            let parentURL = canonicalURL(directoryURL.deletingLastPathComponent())
+            guard parentURL.path != directoryURL.path else {
+                break
+            }
+            directoryURL = parentURL
+        }
+
+        guard updated != expandedDirectoryURLs else {
+            return
+        }
+        expandedDirectoryURLs = updated
     }
 
     private func updateSelectedDocumentMonitor() {
