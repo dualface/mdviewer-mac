@@ -277,18 +277,8 @@ private struct ToolbarView: View {
                 .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 4) {
-                Picker("Width", selection: previewWidthBinding) {
-                    ForEach(PreviewWidth.allCases, id: \.self) { width in
-                        Image(systemName: width.toolbarSystemImage)
-                            .padding(.horizontal, 6)
-                            .accessibilityLabel(width.label)
-                            .tag(width)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .controlSize(.small)
-                .frame(width: 156)
+                PreviewWidthSegmentedControl(selection: previewWidthBinding)
+                    .frame(width: 132, height: 24)
                 .help("Preview Width")
                 .accessibilityLabel("Preview Width")
 
@@ -326,17 +316,100 @@ private struct ToolbarView: View {
     }
 }
 
+private struct PreviewWidthSegmentedControl: NSViewRepresentable {
+    @Binding var selection: PreviewWidth
+
+    func makeNSView(context: Context) -> NSView {
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 132, height: 24))
+        let control = NSSegmentedControl(
+            images: PreviewWidth.allCases.map(\.toolbarImage),
+            trackingMode: .selectOne,
+            target: context.coordinator,
+            action: #selector(Coordinator.selectionDidChange(_:))
+        )
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.segmentStyle = .texturedRounded
+        control.controlSize = .small
+        control.setContentHuggingPriority(.required, for: .horizontal)
+        control.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for index in PreviewWidth.allCases.indices {
+            control.setWidth(33, forSegment: index)
+            control.setToolTip(PreviewWidth.allCases[index].label, forSegment: index)
+        }
+        container.addSubview(control)
+        NSLayoutConstraint.activate([
+            control.leadingAnchor.constraint(equalTo: container.leadingAnchor),
+            control.trailingAnchor.constraint(equalTo: container.trailingAnchor),
+            control.centerYAnchor.constraint(equalTo: container.centerYAnchor)
+        ])
+        context.coordinator.control = control
+        return container
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        let control = context.coordinator.control ?? view.subviews.compactMap { $0 as? NSSegmentedControl }.first
+        guard let control else {
+            return
+        }
+        control.target = context.coordinator
+        control.action = #selector(Coordinator.selectionDidChange(_:))
+        control.selectedSegment = PreviewWidth.allCases.firstIndex(of: selection) ?? 0
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(selection: $selection)
+    }
+
+    final class Coordinator: NSObject {
+        weak var control: NSSegmentedControl?
+        private let selection: Binding<PreviewWidth>
+
+        init(selection: Binding<PreviewWidth>) {
+            self.selection = selection
+        }
+
+        @MainActor @objc func selectionDidChange(_ sender: NSSegmentedControl) {
+            guard PreviewWidth.allCases.indices.contains(sender.selectedSegment) else {
+                return
+            }
+            selection.wrappedValue = PreviewWidth.allCases[sender.selectedSegment]
+        }
+    }
+}
+
 private extension PreviewWidth {
-    var toolbarSystemImage: String {
+    var toolbarImage: NSImage {
+        let size = NSSize(width: 18, height: 14)
+        let image = NSImage(size: size)
+        image.lockFocus()
+
+        NSColor.labelColor.setStroke()
+        let rect = NSRect(
+            x: (size.width - toolbarIndicatorWidth) / 2,
+            y: 2,
+            width: toolbarIndicatorWidth,
+            height: 10
+        )
+        let path = NSBezierPath(roundedRect: rect, xRadius: 2, yRadius: 2)
+        path.lineWidth = 1.5
+        path.stroke()
+
+        image.unlockFocus()
+        image.isTemplate = true
+        image.accessibilityDescription = label
+        return image
+    }
+
+    private var toolbarIndicatorWidth: CGFloat {
         switch self {
         case .full:
-            return "arrow.left.and.right"
+            return 16
         case .wide:
-            return "rectangle"
+            return 13
         case .medium:
-            return "rectangle.center.inset.filled"
+            return 10
         case .narrow:
-            return "sidebar.right"
+            return 7
         }
     }
 }
