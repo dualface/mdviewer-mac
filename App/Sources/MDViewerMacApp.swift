@@ -110,15 +110,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @MainActor
     private func activateDocumentWindow() {
-        NSApp.activate(ignoringOtherApps: true)
         guard let window = NSApp.windows.first(where: { $0.canBecomeKey }) else {
+            NSApp.activate(ignoringOtherApps: true)
             return
         }
+
+        let shouldOrderFront = !window.isVisible || window.isMiniaturized || NSApp.isHidden
         WindowPlacement.ensureVisible(window)
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }
-        window.makeKeyAndOrderFront(nil)
+        if NSApp.isHidden {
+            NSApp.unhide(nil)
+        }
+        if !NSApp.isActive {
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        if shouldOrderFront {
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 }
 
