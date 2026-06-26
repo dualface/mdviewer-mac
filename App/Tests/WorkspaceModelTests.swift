@@ -242,6 +242,24 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "two.md")
     }
 
+    func testDuplicateCloseSelectedDocumentOnlyClosesOneDocument() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let two = tempRoot.appendingPathComponent("two.md")
+        let three = tempRoot.appendingPathComponent("three.md")
+
+        model.openWorkspace(tempRoot)
+        model.openFile(one)
+        model.openFile(two)
+        model.openFile(three)
+
+        model.closeSelectedTab()
+        model.closeSelectedTab()
+
+        XCTAssertEqual(model.tabs.map(\.url.lastPathComponent), ["one.md", "two.md"])
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "two.md")
+    }
+
     func testClosingOnlySelectedDocumentClearsSelection() throws {
         let model = WorkspaceModel()
         let one = tempRoot.appendingPathComponent("one.md")

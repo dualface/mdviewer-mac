@@ -148,6 +148,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleCloseDocumentShortcut(_ event: NSEvent) -> NSEvent? {
         let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
         guard modifiers == .command,
+              !event.isARepeat,
               event.charactersIgnoringModifiers?.lowercased() == "w",
               let workspace,
               workspace.selectedTab != nil

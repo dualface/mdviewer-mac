@@ -61,6 +61,7 @@ final class WorkspaceModel: ObservableObject {
     private var monitoredDocumentURL: URL?
     private var pendingDocumentRefresh: Task<Void, Never>?
     private var pendingTabSelectionRefresh: Task<Void, Never>?
+    private var lastSelectedTabCloseUptime: TimeInterval = 0
 
     var rootURLDidChange: ((URL?) -> Void)?
 
@@ -330,6 +331,11 @@ final class WorkspaceModel: ObservableObject {
         guard let selectedTabID else {
             return
         }
+        let now = ProcessInfo.processInfo.systemUptime
+        guard now - lastSelectedTabCloseUptime > Self.duplicateSelectedTabCloseInterval else {
+            return
+        }
+        lastSelectedTabCloseUptime = now
         closeTab(selectedTabID)
     }
 
@@ -722,4 +728,6 @@ final class WorkspaceModel: ObservableObject {
             }
         }
     }
+
+    private static let duplicateSelectedTabCloseInterval: TimeInterval = 0.15
 }
