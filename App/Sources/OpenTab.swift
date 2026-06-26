@@ -6,7 +6,6 @@ struct OpenTab: Identifiable, Sendable {
     var title: String
     var previewKind: PreviewKind
     var payload: RendererPayload?
-    var renderedContentCache: RenderedContentCache?
     var errorMessage: String?
 
     init(url: URL, previewKind: PreviewKind) {
@@ -15,11 +14,6 @@ struct OpenTab: Identifiable, Sendable {
         self.title = url.lastPathComponent
         self.previewKind = previewKind
     }
-}
-
-struct RenderedContentCache: Codable, Equatable, Sendable {
-    var html: String
-    var payload: RendererPayload
 }
 
 struct RendererPayload: Codable, Equatable, Sendable {

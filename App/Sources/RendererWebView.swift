@@ -5,7 +5,6 @@ struct RendererWebView: NSViewRepresentable {
     @ObservedObject var workspace: WorkspaceModel
     let tabID: OpenTab.ID
     let payload: RendererPayload?
-    let cachedContent: RenderedContentCache?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(workspace: workspace)
@@ -49,7 +48,7 @@ struct RendererWebView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.workspace = workspace
         context.coordinator.schemeHandler?.update(resolver: workspace.resolver)
-        context.coordinator.update(tabID: tabID, payload: payload, cachedContent: cachedContent)
+        context.coordinator.update(tabID: tabID, payload: payload)
         context.coordinator.renderIfReady()
     }
 
@@ -71,10 +70,9 @@ struct RendererWebView: NSViewRepresentable {
         var workspace: WorkspaceModel
         var latestTabID: OpenTab.ID?
         var latestPayload: RendererPayload?
-        var latestCachedContent: RenderedContentCache?
         var isReady = false
         private var lastRenderedJSON: String?
-        private var lastRestoredCachePayload: RendererPayload?
+        private var lastCompletedRenderID: Int?
         private var renderID = 0
         private var currentRenderFailed = false
         private var hasDisplayedRender = false
@@ -84,17 +82,15 @@ struct RendererWebView: NSViewRepresentable {
             self.workspace = workspace
         }
 
-        func update(tabID: OpenTab.ID, payload: RendererPayload?, cachedContent: RenderedContentCache?) {
+        func update(tabID: OpenTab.ID, payload: RendererPayload?) {
             if latestTabID != tabID {
                 cancelCurrentRender()
                 renderID += 1
                 currentRenderFailed = false
                 lastRenderedJSON = nil
-                lastRestoredCachePayload = nil
             }
             latestTabID = tabID
             latestPayload = payload
-            latestCachedContent = cachedContent
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -144,7 +140,7 @@ struct RendererWebView: NSViewRepresentable {
             }
             hasDisplayedRender = true
             webView.alphaValue = 1
-            workspace.statusMessage = "Renderer load failed: \(error.localizedDescription)"
+            updateStatusMessageIfSelected("Renderer load failed: \(error.localizedDescription)")
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -153,7 +149,7 @@ struct RendererWebView: NSViewRepresentable {
             }
             hasDisplayedRender = true
             webView.alphaValue = 1
-            workspace.statusMessage = "Renderer load failed: \(error.localizedDescription)"
+            updateStatusMessageIfSelected("Renderer load failed: \(error.localizedDescription)")
         }
 
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
@@ -162,7 +158,7 @@ struct RendererWebView: NSViewRepresentable {
             }
             hasDisplayedRender = true
             webView.alphaValue = 1
-            workspace.statusMessage = message
+            updateStatusMessageIfSelected(message)
         }
 
         func renderIfReady(force: Bool = false) {
@@ -178,16 +174,13 @@ struct RendererWebView: NSViewRepresentable {
             guard force || json != lastRenderedJSON else {
                 return
             }
-            if restoreCacheIfAvailable(for: latestPayload) {
-                lastRenderedJSON = json
-                return
-            }
             let previousRenderedJSON = lastRenderedJSON
             lastRenderedJSON = json
             cancelCurrentRender()
             renderID += 1
             let startedRenderID = renderID
             currentRenderFailed = false
+            lastCompletedRenderID = nil
             if !hasDisplayedRender {
                 webView.alphaValue = Self.renderingAlpha
             }
@@ -226,7 +219,7 @@ struct RendererWebView: NSViewRepresentable {
                         guard self.isActive, self.renderID == startedRenderID else {
                             return
                         }
-                        self.workspace.statusMessage = "Render failed: \(error.localizedDescription)"
+                        self.updateStatusMessageIfSelected("Render failed: \(error.localizedDescription)")
                     }
                 } else if let didStart = result as? Bool, !didStart {
                     self.lastRenderedJSON = previousRenderedJSON
@@ -243,9 +236,8 @@ struct RendererWebView: NSViewRepresentable {
             isActive = false
             renderID += 1
             latestPayload = nil
-            latestCachedContent = nil
             lastRenderedJSON = nil
-            lastRestoredCachePayload = nil
+            lastCompletedRenderID = nil
         }
 
         func cancelCurrentRender() {
@@ -283,7 +275,7 @@ struct RendererWebView: NSViewRepresentable {
                 guard self.isActive, self.renderID == failedRenderID else {
                     return
                 }
-                self.workspace.statusMessage = text
+                self.updateStatusMessageIfSelected(text)
             }
         }
 
@@ -304,15 +296,18 @@ struct RendererWebView: NSViewRepresentable {
             guard isActive, completedRenderID == renderID else {
                 return
             }
+            guard lastCompletedRenderID != completedRenderID else {
+                return
+            }
+            lastCompletedRenderID = completedRenderID
             hasDisplayedRender = true
             webView?.alphaValue = 1
             if !currentRenderFailed {
-                cacheRenderedContentIfCurrent(completedRenderID)
                 Task { @MainActor in
                     guard self.isActive, self.renderID == completedRenderID else {
                         return
                     }
-                    self.workspace.statusMessage = nil
+                    self.updateStatusMessageIfSelected(nil)
                 }
             }
         }
@@ -353,54 +348,6 @@ struct RendererWebView: NSViewRepresentable {
             renderIfReady(force: true)
         }
 
-        private func restoreCacheIfAvailable(for payload: RendererPayload) -> Bool {
-            guard lastRestoredCachePayload != payload,
-                  let webView,
-                  let cache = latestCachedContent,
-                  cache.payload == payload,
-                  let data = try? JSONEncoder().encode(cache)
-            else {
-                return false
-            }
-            lastRestoredCachePayload = payload
-            let encoded = data.base64EncodedString()
-            let script = """
-            (() => {
-              const cache = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('\(encoded)'), c => c.charCodeAt(0))));
-              window.MDViewer?.restoreRenderedContent?.(cache.payload, cache.html);
-            })();
-            """
-            webView.evaluateJavaScript(script)
-            webView.alphaValue = 1
-            hasDisplayedRender = true
-            return true
-        }
-
-        private func cacheRenderedContentIfCurrent(_ completedRenderID: Int) {
-            guard let webView,
-                  let latestTabID,
-                  let payload = latestPayload
-            else {
-                return
-            }
-            webView.evaluateJavaScript("window.MDViewer?.snapshotRenderedContent?.()") { [weak self] result, _ in
-                guard let self,
-                      self.isActive,
-                      self.renderID == completedRenderID,
-                      let html = result as? String
-                else {
-                    return
-                }
-                let cache = RenderedContentCache(html: html, payload: payload)
-                Task { @MainActor in
-                    guard self.isActive, self.renderID == completedRenderID else {
-                        return
-                    }
-                    self.workspace.updateRenderedContentCache(cache, for: latestTabID)
-                }
-            }
-        }
-
         private func checkRendererReady(attempt: Int = 0) {
             guard isActive, !isReady, let webView else {
                 return
@@ -430,10 +377,17 @@ struct RendererWebView: NSViewRepresentable {
                         else {
                             return
                         }
-                        self.workspace.statusMessage = "Renderer script did not initialize."
+                        self.updateStatusMessageIfSelected("Renderer script did not initialize.")
                     }
                 }
             }
+        }
+
+        private func updateStatusMessageIfSelected(_ message: String?) {
+            guard latestTabID == workspace.selectedTabID else {
+                return
+            }
+            workspace.statusMessage = message
         }
 
         static let renderingAlpha: CGFloat = 0.001

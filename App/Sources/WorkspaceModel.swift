@@ -390,34 +390,23 @@ final class WorkspaceModel: ObservableObject {
         do {
             let payload = try makePayload(for: tab.url, rootURL: rootURL, resolver: resolver)
             tab.previewKind = payload.kind
-            if tab.payload != payload {
-                tab.renderedContentCache = nil
-            }
             tab.payload = payload
             tab.errorMessage = nil
         } catch {
             tab.payload = nil
-            tab.renderedContentCache = nil
             tab.errorMessage = error.localizedDescription
+        }
+        guard tab.previewKind != tabs[index].previewKind ||
+              tab.payload != tabs[index].payload ||
+              tab.errorMessage != tabs[index].errorMessage
+        else {
+            return
         }
         tabs[index] = tab
     }
 
     func payloadForSelectedTab() -> RendererPayload? {
         selectedTab?.payload
-    }
-
-    func renderedContentCache(for tabID: OpenTab.ID) -> RenderedContentCache? {
-        tabs.first { $0.id == tabID }?.renderedContentCache
-    }
-
-    func updateRenderedContentCache(_ cache: RenderedContentCache, for tabID: OpenTab.ID) {
-        guard let index = tabs.firstIndex(where: { $0.id == tabID }),
-              tabs[index].payload == cache.payload
-        else {
-            return
-        }
-        tabs[index].renderedContentCache = cache
     }
 
     func clearWorkspace() {
@@ -534,7 +523,6 @@ final class WorkspaceModel: ObservableObject {
             payload.fontSize = settings.fontSize
             payload.fontFamily = settings.rendererFontFamily
             payload.previewWidth = settings.previewWidth
-            tabs[idx].renderedContentCache = nil
             tabs[idx].payload = payload
         }
         persistWorkspace()

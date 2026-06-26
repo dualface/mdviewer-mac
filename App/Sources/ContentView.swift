@@ -771,23 +771,26 @@ private struct PreviewContainerView: View {
 
     var body: some View {
         ZStack {
-            if let tab = workspace.selectedTab {
-                if let payload = tab.payload {
-                    RenderingPlaceholderView(title: tab.title)
-                    RendererWebView(
-                        workspace: workspace,
-                        tabID: tab.id,
-                        payload: payload,
-                        cachedContent: tab.renderedContentCache
-                    )
-                } else {
-                    VStack(spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 32, weight: .medium))
-                            .foregroundStyle(.secondary)
-                        Text(tab.errorMessage ?? "Unable to preview this file.")
-                            .foregroundStyle(.secondary)
+            if let selectedTab = workspace.selectedTab {
+                if selectedTab.payload != nil {
+                    RenderingPlaceholderView(title: selectedTab.title)
+                }
+
+                ForEach(workspace.tabs) { tab in
+                    if let payload = tab.payload {
+                        RendererWebView(
+                            workspace: workspace,
+                            tabID: tab.id,
+                            payload: payload
+                        )
+                        .opacity(tab.id == workspace.selectedTabID ? 1 : 0)
+                        .allowsHitTesting(tab.id == workspace.selectedTabID)
+                        .accessibilityHidden(tab.id != workspace.selectedTabID)
                     }
+                }
+
+                if selectedTab.payload == nil {
+                    PreviewErrorView(message: selectedTab.errorMessage)
                 }
             } else {
                 EmptyPreviewView()
@@ -807,6 +810,20 @@ private struct PreviewContainerView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(nsColor: .textBackgroundColor))
+    }
+}
+
+private struct PreviewErrorView: View {
+    let message: String?
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(.system(size: 32, weight: .medium))
+                .foregroundStyle(.secondary)
+            Text(message ?? "Unable to preview this file.")
+                .foregroundStyle(.secondary)
+        }
     }
 }
 
