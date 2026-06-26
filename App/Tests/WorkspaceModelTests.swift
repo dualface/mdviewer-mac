@@ -210,6 +210,28 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertTrue(model.settings.isSidebarVisible)
     }
 
+    func testToggleToolbarChangesVisibility() throws {
+        let model = WorkspaceModel()
+
+        XCTAssertTrue(model.settings.isToolbarVisible)
+
+        model.toggleToolbar()
+        XCTAssertFalse(model.settings.isToolbarVisible)
+
+        model.toggleToolbar()
+        XCTAssertTrue(model.settings.isToolbarVisible)
+    }
+
+    func testOpeningDirectoryURLShowsSidebar() throws {
+        let model = WorkspaceModel()
+
+        model.setSidebarVisible(false)
+        model.openDirectoryURL(tempRoot)
+
+        XCTAssertTrue(model.settings.isSidebarVisible)
+        XCTAssertEqual(model.rootURL, tempRoot.standardizedFileURL.resolvingSymlinksInPath())
+    }
+
     func testShowingSidebarExpandsSelectedDocumentDirectory() throws {
         let model = WorkspaceModel()
         let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)

@@ -85,8 +85,13 @@ final class WorkspaceModel: ObservableObject {
         panel.allowsMultipleSelection = false
         panel.prompt = "Open"
         if panel.runModal() == .OK, let url = panel.url {
-            openWorkspace(url)
+            openDirectoryURL(url)
         }
+    }
+
+    func openDirectoryURL(_ url: URL) {
+        setSidebarVisible(true)
+        openWorkspace(url)
     }
 
     func openFilePanel() {
@@ -165,6 +170,12 @@ final class WorkspaceModel: ObservableObject {
 
     func toggleSidebar() {
         setSidebarVisible(!settings.isSidebarVisible)
+    }
+
+    func toggleToolbar() {
+        var updated = settings
+        updated.isToolbarVisible.toggle()
+        settings = updated
     }
 
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {

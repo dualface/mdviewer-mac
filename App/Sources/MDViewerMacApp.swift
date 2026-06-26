@@ -45,6 +45,11 @@ struct MDViewerMacApp: App {
             }
 
             CommandGroup(after: .toolbar) {
+                Button(workspace.settings.isToolbarVisible ? "Hide Toolbar" : "Show Toolbar") {
+                    workspace.toggleToolbar()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+
                 Button("Refresh") {
                     workspace.refreshSelectedTab()
                 }

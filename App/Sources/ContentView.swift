@@ -12,10 +12,12 @@ struct ContentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            ToolbarView()
-                .padding(.horizontal, 12)
-                .padding(.top, 10)
-                .padding(.bottom, 8)
+            if workspace.settings.isToolbarVisible {
+                ToolbarView()
+                    .padding(.horizontal, 12)
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+            }
             HStack(spacing: 0) {
                 if workspace.settings.isSidebarVisible {
                     SidebarView()
@@ -23,7 +25,7 @@ struct ContentView: View {
                     SidebarResizeHandle(width: $liveSidebarWidth)
                 }
                 VStack(spacing: 0) {
-                    if !workspace.tabs.isEmpty {
+                    if workspace.tabs.count > 1 {
                         TabBarView()
                     }
                     PreviewContainerView()

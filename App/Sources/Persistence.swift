@@ -14,6 +14,7 @@ struct PersistedSettings: Codable, Sendable {
     var previewWidth: PreviewWidth = .medium
     var sidebarWidth: Double = 260
     var isSidebarVisible: Bool = true
+    var isToolbarVisible: Bool = true
 
     init() {}
 
@@ -25,6 +26,7 @@ struct PersistedSettings: Codable, Sendable {
         previewWidth = try container.decodeIfPresent(PreviewWidth.self, forKey: .previewWidth) ?? .medium
         sidebarWidth = try container.decodeIfPresent(Double.self, forKey: .sidebarWidth) ?? 260
         isSidebarVisible = try container.decodeIfPresent(Bool.self, forKey: .isSidebarVisible) ?? true
+        isToolbarVisible = try container.decodeIfPresent(Bool.self, forKey: .isToolbarVisible) ?? true
     }
 
     var rendererFontFamily: String {
