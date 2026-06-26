@@ -276,30 +276,33 @@ private struct ToolbarView: View {
             WorkspacePathView()
                 .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
 
-            Picker("Width", selection: previewWidthBinding) {
-                ForEach(PreviewWidth.allCases, id: \.self) { width in
-                    Image(systemName: width.toolbarSystemImage)
-                        .accessibilityLabel(width.label)
-                        .tag(width)
+            HStack(spacing: 4) {
+                Picker("Width", selection: previewWidthBinding) {
+                    ForEach(PreviewWidth.allCases, id: \.self) { width in
+                        Image(systemName: width.toolbarSystemImage)
+                            .padding(.horizontal, 6)
+                            .accessibilityLabel(width.label)
+                            .tag(width)
+                    }
                 }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 132)
-            .help("Preview Width")
-            .accessibilityLabel("Preview Width")
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 156)
+                .help("Preview Width")
+                .accessibilityLabel("Preview Width")
 
-            Picker("Font Size", selection: previewFontSizeBinding) {
-                ForEach(PreviewFont.sizes, id: \.self) { size in
-                    Text("\(Int(size))px").tag(size)
+                Picker("Font Size", selection: previewFontSizeBinding) {
+                    ForEach(PreviewFont.sizes, id: \.self) { size in
+                        Text("\(Int(size))px").tag(size)
+                    }
                 }
+                .labelsHidden()
+                .controlSize(.small)
+                .frame(width: 82)
+                .help("Preview Font Size")
+                .accessibilityLabel("Preview Font Size")
             }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 82)
-            .help("Preview Font Size")
-            .accessibilityLabel("Preview Font Size")
         }
         .padding(.horizontal, 8)
         .frame(height: 46)
