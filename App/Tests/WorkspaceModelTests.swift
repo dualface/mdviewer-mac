@@ -234,6 +234,18 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.settings.previewWidth, .narrow)
     }
 
+    func testSetThemeChangesTheme() throws {
+        let model = WorkspaceModel()
+
+        XCTAssertEqual(model.settings.theme, .system)
+
+        model.setTheme(.dark)
+        XCTAssertEqual(model.settings.theme, .dark)
+
+        model.setTheme(.light)
+        XCTAssertEqual(model.settings.theme, .light)
+    }
+
     func testOpeningDirectoryURLShowsSidebar() throws {
         let model = WorkspaceModel()
 

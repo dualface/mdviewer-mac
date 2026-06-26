@@ -187,6 +187,15 @@ final class WorkspaceModel: ObservableObject {
         settings = updated
     }
 
+    func setTheme(_ theme: AppTheme) {
+        guard settings.theme != theme else {
+            return
+        }
+        var updated = settings
+        updated.theme = theme
+        settings = updated
+    }
+
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
         stopSelectedDocumentMonitor()
         stopAccessingCurrentWorkspace()

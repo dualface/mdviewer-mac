@@ -312,16 +312,6 @@ private struct ToolbarView: View {
             .help("Font")
             .accessibilityLabel("Font")
 
-            Picker("Theme", selection: settingsBinding(\.theme)) {
-                Text("System").tag(AppTheme.system)
-                Text("Light").tag(AppTheme.light)
-                Text("Dark").tag(AppTheme.dark)
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 110)
-            .help("Theme")
-            .accessibilityLabel("Theme")
         }
         .padding(.horizontal, 8)
         .frame(height: 46)

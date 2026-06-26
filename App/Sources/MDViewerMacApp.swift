@@ -60,6 +60,15 @@ struct MDViewerMacApp: App {
                     workspace.refreshSelectedTab()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
+
+                Menu("Theme") {
+                    ForEach(AppTheme.allCases, id: \.self) { theme in
+                        Button(theme.label) {
+                            workspace.setTheme(theme)
+                        }
+                        .disabled(workspace.settings.theme == theme)
+                    }
+                }
             }
 
             CommandGroup(after: .windowArrangement) {
