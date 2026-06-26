@@ -33,29 +33,28 @@ struct MDViewerMacApp: App {
                 }
                 .keyboardShortcut("e", modifiers: [.command])
 
-                Button(workspace.selectedTab == nil ? "Close Window" : "Close File") {
-                    if workspace.selectedTab == nil {
-                        NSApp.keyWindow?.performClose(nil)
-                    } else {
-                        workspace.closeSelectedTab()
-                    }
+                Divider()
+
+                Button("Close File") {
+                    workspace.closeSelectedTab()
                 }
                 .keyboardShortcut("w", modifiers: [.command])
+                .disabled(workspace.selectedTab == nil)
+
+                Button("Close Other Files") {
+                    workspace.closeOtherTabs()
+                }
+                .keyboardShortcut("w", modifiers: [.command, .option])
+                .disabled(workspace.selectedTab == nil || workspace.tabs.count <= 1)
+
+                Button("Close All Files") {
+                    workspace.closeAllTabs()
+                }
+                .keyboardShortcut("w", modifiers: [.command, .shift])
+                .disabled(workspace.tabs.isEmpty)
             }
 
             CommandGroup(replacing: .sidebar) {
-                Button(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
-                    workspace.toggleSidebar()
-                }
-                .keyboardShortcut("b", modifiers: [.command])
-            }
-
-            CommandGroup(after: .toolbar) {
-                Button(workspace.settings.isToolbarVisible ? "Hide Toolbar" : "Show Toolbar") {
-                    workspace.toggleToolbar()
-                }
-                .keyboardShortcut("t", modifiers: [.command, .shift])
-
                 Button("Refresh") {
                     workspace.refreshSelectedTab()
                 }
@@ -105,6 +104,18 @@ struct MDViewerMacApp: App {
                         }
                     }
                 }
+
+                Divider()
+
+                Button(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                    workspace.toggleSidebar()
+                }
+                .keyboardShortcut("b", modifiers: [.command])
+
+                Button(workspace.settings.isToolbarVisible ? "Hide Toolbar" : "Show Toolbar") {
+                    workspace.toggleToolbar()
+                }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
             }
 
             CommandGroup(after: .windowArrangement) {
@@ -115,18 +126,6 @@ struct MDViewerMacApp: App {
                     .keyboardShortcut(KeyEquivalent(tabShortcutKeys[index]), modifiers: [.command])
                     .disabled(workspace.tabs.count <= index)
                 }
-
-                Button("Close Other Files") {
-                    workspace.closeOtherTabs()
-                }
-                .keyboardShortcut("w", modifiers: [.command, .option])
-                .disabled(workspace.selectedTab == nil || workspace.tabs.count <= 1)
-
-                Button("Close All Files") {
-                    workspace.closeAllTabs()
-                }
-                .keyboardShortcut("w", modifiers: [.command, .shift])
-                .disabled(workspace.tabs.isEmpty)
             }
         }
     }
