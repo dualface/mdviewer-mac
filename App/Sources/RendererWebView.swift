@@ -49,7 +49,6 @@ struct RendererWebView: NSViewRepresentable {
         context.coordinator.workspace = workspace
         context.coordinator.schemeHandler?.update(resolver: workspace.resolver)
         context.coordinator.update(tabID: tabID, payload: payload)
-        context.coordinator.renderIfReady()
     }
 
     static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
@@ -83,7 +82,9 @@ struct RendererWebView: NSViewRepresentable {
         }
 
         func update(tabID: OpenTab.ID, payload: RendererPayload?) {
-            if latestTabID != tabID {
+            let didChangeTab = latestTabID != tabID
+            let didChangePayload = latestPayload != payload
+            if didChangeTab {
                 cancelCurrentRender()
                 renderID += 1
                 currentRenderFailed = false
@@ -91,6 +92,9 @@ struct RendererWebView: NSViewRepresentable {
             }
             latestTabID = tabID
             latestPayload = payload
+            if didChangeTab || didChangePayload {
+                renderIfReady()
+            }
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {

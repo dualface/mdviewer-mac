@@ -8,6 +8,7 @@ import './styles.css';
 
 const preview = document.getElementById('preview');
 let currentPayload = null;
+let renderedPayloadKey = null;
 let activeRenderToken = null;
 let activeMarkdownWorker = null;
 
@@ -86,12 +87,20 @@ window.MDViewer = {
   },
 
   async render(payload, renderID) {
+    const payloadKey = JSON.stringify(payload);
+    if (!activeRenderToken && renderedPayloadKey === payloadKey) {
+      this.lastStartedRenderID = renderID;
+      this.lastCompletedRenderID = Math.max(this.lastCompletedRenderID, renderID);
+      postMessage('renderComplete', { renderID });
+      return;
+    }
     cancelActiveRender();
     const token = createRenderToken(renderID);
     activeRenderToken = token;
     this.lastStartedRenderID = renderID;
     this.lastCompletedRenderID = 0;
     currentPayload = payload;
+    let didRenderSuccessfully = false;
     try {
       assertRenderActive(token);
       applySettings(payload);
@@ -104,6 +113,7 @@ window.MDViewer = {
       } else {
         renderUnsupported(payload, token);
       }
+      didRenderSuccessfully = true;
     } catch (error) {
       if (shouldAbortRender(error, token)) {
         return;
@@ -112,6 +122,9 @@ window.MDViewer = {
       preview.innerHTML = `<div class="error">Render error: ${escapeHtml(error.message)}</div>`;
     } finally {
       if (!token.isCancelled && activeRenderToken === token) {
+        if (didRenderSuccessfully) {
+          renderedPayloadKey = payloadKey;
+        }
         this.lastCompletedRenderID = Math.max(this.lastCompletedRenderID, renderID);
         await waitForPaint(token);
         if (!token.isCancelled && activeRenderToken === token) {
