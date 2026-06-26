@@ -18,6 +18,13 @@ struct RendererWebView: NSViewRepresentable {
         configuration.userContentController.add(context.coordinator, name: "renderComplete")
         configuration.userContentController.add(context.coordinator, name: "openLink")
         configuration.userContentController.add(context.coordinator, name: "renderError")
+        configuration.userContentController.addUserScript(
+            WKUserScript(
+                source: Self.startupErrorScript,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+        )
         configuration.defaultWebpagePreferences.allowsContentJavaScript = true
 
         let webView = WKWebView(frame: .zero, configuration: configuration)
@@ -27,10 +34,9 @@ struct RendererWebView: NSViewRepresentable {
         webView.alphaValue = Coordinator.renderingAlpha
         context.coordinator.webView = webView
 
-        if let rendererURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Renderer"),
-           let html = try? String(contentsOf: rendererURL, encoding: .utf8) {
+        if let rendererURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Renderer") {
             let directory = rendererURL.deletingLastPathComponent()
-            webView.loadHTMLString(html, baseURL: directory)
+            webView.loadFileURL(rendererURL, allowingReadAccessTo: directory)
         } else {
             workspace.statusMessage = "Renderer bundle is missing."
         }
@@ -53,6 +59,7 @@ struct RendererWebView: NSViewRepresentable {
         var isReady = false
         private var lastRenderedJSON: String?
         private var renderID = 0
+        private var currentRenderFailed = false
 
         init(workspace: WorkspaceModel) {
             self.workspace = workspace
@@ -61,8 +68,7 @@ struct RendererWebView: NSViewRepresentable {
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             switch message.name {
             case "rendererReady":
-                isReady = true
-                renderIfReady(force: true)
+                markRendererReady()
             case "renderComplete":
                 guard let body = message.body as? [String: Any],
                       let completedRenderID = body["renderID"] as? Int,
@@ -71,6 +77,11 @@ struct RendererWebView: NSViewRepresentable {
                     return
                 }
                 webView?.alphaValue = 1
+                if !currentRenderFailed {
+                    Task { @MainActor in
+                        self.workspace.statusMessage = nil
+                    }
+                }
             case "openLink":
                 guard let body = message.body as? [String: Any],
                       let href = body["href"] as? String,
@@ -83,6 +94,8 @@ struct RendererWebView: NSViewRepresentable {
                 }
             case "renderError":
                 if let text = message.body as? String {
+                    currentRenderFailed = true
+                    lastRenderedJSON = nil
                     webView?.alphaValue = 1
                     Task { @MainActor in
                         self.workspace.statusMessage = text
@@ -94,8 +107,7 @@ struct RendererWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-            isReady = true
-            renderIfReady(force: true)
+            checkRendererReady()
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
@@ -125,29 +137,92 @@ struct RendererWebView: NSViewRepresentable {
             guard force || json != lastRenderedJSON else {
                 return
             }
+            let previousRenderedJSON = lastRenderedJSON
             lastRenderedJSON = json
             renderID += 1
+            currentRenderFailed = false
             webView.alphaValue = Self.renderingAlpha
             let encoded = data.base64EncodedString()
             let script = """
             (() => {
-              const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('\(encoded)'), c => c.charCodeAt(0))));
-              if (!window.MDViewer) {
-                throw new Error('Renderer script did not initialize.');
+              try {
+                const payload = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('\(encoded)'), c => c.charCodeAt(0))));
+                if (!window.MDViewer) {
+                  throw new Error('Renderer script did not initialize.');
+                }
+                void window.MDViewer.render(payload, \(renderID));
+                return true;
+              } catch (error) {
+                window.webkit?.messageHandlers?.renderError?.postMessage(error?.message || String(error));
+                return false;
               }
-              window.MDViewer.render(payload, \(renderID));
             })();
             """
-            webView.evaluateJavaScript(script) { _, error in
+            webView.evaluateJavaScript(script) { result, error in
                 if let error {
+                    self.lastRenderedJSON = previousRenderedJSON
                     webView.alphaValue = 1
                     Task { @MainActor in
                         self.workspace.statusMessage = "Render failed: \(error.localizedDescription)"
+                    }
+                } else if let didStart = result as? Bool, !didStart {
+                    self.lastRenderedJSON = previousRenderedJSON
+                    webView.alphaValue = 1
+                }
+            }
+        }
+
+        private func markRendererReady() {
+            guard !isReady else {
+                return
+            }
+            isReady = true
+            renderIfReady(force: true)
+        }
+
+        private func checkRendererReady(attempt: Int = 0) {
+            guard !isReady, let webView else {
+                return
+            }
+            webView.evaluateJavaScript("Boolean(window.MDViewer && window.MDViewer.render)") { result, _ in
+                if result as? Bool == true {
+                    self.markRendererReady()
+                } else if attempt < Self.maxRendererReadyChecks {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Self.rendererReadyCheckInterval) { [weak self] in
+                        self?.checkRendererReady(attempt: attempt + 1)
+                    }
+                } else {
+                    webView.alphaValue = 1
+                    Task { @MainActor in
+                        self.workspace.statusMessage = "Renderer script did not initialize."
                     }
                 }
             }
         }
 
         static let renderingAlpha: CGFloat = 0.001
+        static let rendererReadyCheckInterval: TimeInterval = 0.05
+        static let maxRendererReadyChecks = 40
     }
+
+    static let startupErrorScript = """
+    (() => {
+      const post = (message) => {
+        window.webkit?.messageHandlers?.renderError?.postMessage(String(message || 'Renderer JavaScript error'));
+      };
+      window.addEventListener('error', (event) => {
+        const target = event.target;
+        if (target && target !== window && target.tagName === 'SCRIPT') {
+          post(`Renderer script failed to load: ${target.src || 'unknown script'}`);
+          return;
+        }
+        const location = event.filename ? ` (${event.filename}${event.lineno ? `:${event.lineno}` : ''})` : '';
+        post(`${event.message || 'Renderer JavaScript error'}${location}`);
+      }, true);
+      window.addEventListener('unhandledrejection', (event) => {
+        const reason = event.reason;
+        post(reason?.message || String(reason || 'Unhandled renderer rejection'));
+      });
+    })();
+    """
 }

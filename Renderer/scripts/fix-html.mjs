@@ -14,10 +14,15 @@ html = html
 writeFileSync(rendererHtml, html);
 
 let script = readFileSync(rendererScript, 'utf8');
-script = script.replaceAll(
-  'import.meta.url',
-  '(document.currentScript && document.currentScript.src || document.baseURI)'
-);
+script = script
+  .replaceAll('import.meta.resolve', 'undefined')
+  .replaceAll(
+    'import.meta.url',
+    '(document.currentScript && document.currentScript.src || document.baseURI)'
+  );
+if (script.includes('import.meta')) {
+  throw new Error('Renderer bundle still contains import.meta, which cannot run as a classic script.');
+}
 writeFileSync(rendererScript, script);
 
 trimTrailingWhitespace(rendererRoot);
