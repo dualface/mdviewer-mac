@@ -104,7 +104,7 @@ final class WorkspaceModelTests: XCTestCase {
         wait(for: [secondRefresh], timeout: 2)
     }
 
-    func testOpeningMarkdownFromExternalEventSwitchesToContainingDirectoryWithoutShowingSidebar() throws {
+    func testOpeningExternalDocumentInsideCurrentWorkspaceKeepsWorkspaceAndExpandsDirectory() throws {
         let model = WorkspaceModel()
         let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)
         let nested = childDirectory.appendingPathComponent("nested.md")
@@ -113,8 +113,50 @@ final class WorkspaceModelTests: XCTestCase {
 
         model.openWorkspace(tempRoot)
         model.setSidebarVisible(true)
-        model.openExternalDocumentURL(nested)
+        let result = model.openExternalDocumentURL(nested)
 
+        XCTAssertEqual(result, .handled)
+        XCTAssertEqual(model.rootURL, tempRoot.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTab?.url, nested.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Nested")
+        XCTAssertTrue(model.settings.isSidebarVisible)
+        XCTAssertTrue(model.isDirectoryExpanded(childDirectory))
+    }
+
+    func testOpeningExternalDocumentOutsideCurrentWorkspaceRequestsNewWorkspaceWithoutChangingState() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let outsideRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let outsideDocument = outsideRoot.appendingPathComponent("outside.md")
+        try FileManager.default.createDirectory(at: outsideRoot, withIntermediateDirectories: true)
+        try "# Outside".write(to: outsideDocument, atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.removeItem(at: outsideRoot)
+        }
+
+        model.openWorkspace(tempRoot)
+        model.openFile(one)
+        let selectedTabID = model.selectedTabID
+        let result = model.openExternalDocumentURL(outsideDocument)
+
+        XCTAssertEqual(result, .needsWorkspace(outsideDocument.standardizedFileURL.resolvingSymlinksInPath()))
+        XCTAssertEqual(model.rootURL, tempRoot.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTabID, selectedTabID)
+        XCTAssertEqual(model.selectedTab?.url, one.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.tabs.map(\.url.lastPathComponent), ["one.md"])
+    }
+
+    func testOpeningExternalDocumentCanInitializeWorkspaceWhenAllowed() throws {
+        let model = WorkspaceModel()
+        let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)
+        let nested = childDirectory.appendingPathComponent("nested.md")
+        try FileManager.default.createDirectory(at: childDirectory, withIntermediateDirectories: true)
+        try "# Nested".write(to: nested, atomically: true, encoding: .utf8)
+
+        let result = model.openExternalDocumentURL(nested, opensWorkspaceIfNeeded: true)
+
+        XCTAssertEqual(result, .handled)
         XCTAssertEqual(model.rootURL, childDirectory.standardizedFileURL.resolvingSymlinksInPath())
         XCTAssertEqual(model.selectedTab?.url, nested.standardizedFileURL.resolvingSymlinksInPath())
         XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Nested")

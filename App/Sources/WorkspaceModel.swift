@@ -22,9 +22,18 @@ enum WorkspaceError: LocalizedError {
     }
 }
 
+enum ExternalDocumentOpenResult: Equatable {
+    case handled
+    case needsWorkspace(URL)
+}
+
 @MainActor
 final class WorkspaceModel: ObservableObject {
-    @Published private(set) var rootURL: URL?
+    @Published private(set) var rootURL: URL? {
+        didSet {
+            rootURLDidChange?(rootURL)
+        }
+    }
     @Published var rootChildren: [FileItem] = []
     @Published var tabs: [OpenTab] = []
     @Published private(set) var expandedDirectoryURLs: Set<URL> = []
@@ -51,6 +60,8 @@ final class WorkspaceModel: ObservableObject {
     private var selectedDocumentMonitor: DocumentChangeMonitor?
     private var monitoredDocumentURL: URL?
     private var pendingDocumentRefresh: Task<Void, Never>?
+
+    var rootURLDidChange: ((URL?) -> Void)?
 
     init() {
         self.settings = AppStorage.loadSettings()
@@ -108,27 +119,34 @@ final class WorkspaceModel: ObservableObject {
         openWorkspace(parent, initialFile: canonical)
     }
 
-    func openExternalDocumentURL(_ url: URL) {
+    @discardableResult
+    func openExternalDocumentURL(_ url: URL, opensWorkspaceIfNeeded: Bool = false) -> ExternalDocumentOpenResult {
         let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
         var isDirectory: ObjCBool = false
         FileManager.default.fileExists(atPath: canonical.path, isDirectory: &isDirectory)
-        if isDirectory.boolValue {
-            openDocumentURL(canonical)
-            return
+
+        if let resolver, resolver.contains(canonical) {
+            if isDirectory.boolValue {
+                openDocumentURL(canonical)
+            } else {
+                openFile(canonical)
+            }
+            return .handled
         }
 
-        guard FileTypeDetector.isMarkdown(canonical) else {
+        guard opensWorkspaceIfNeeded else {
+            return .needsWorkspace(canonical)
+        }
+
+        if isDirectory.boolValue {
             openDocumentURL(canonical)
-            return
+            return .handled
         }
 
         let parent = canonical.deletingLastPathComponent()
-        setSidebarVisible(false)
-        if rootURL.map(canonicalURL) == parent {
-            openFile(canonical)
-        } else {
-            openWorkspace(parent, initialFile: canonical)
-        }
+        setSidebarVisible(!FileTypeDetector.isMarkdown(canonical))
+        openWorkspace(parent, initialFile: canonical)
+        return .handled
     }
 
     func setSidebarVisible(_ isVisible: Bool) {
