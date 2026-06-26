@@ -12,18 +12,18 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             ToolbarView()
-            Divider()
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
             HStack(spacing: 0) {
                 if workspace.settings.isSidebarVisible {
                     SidebarView()
                         .frame(width: sidebarWidth)
-                        .background(Color(nsColor: .controlBackgroundColor))
                     SidebarResizeHandle(width: $liveSidebarWidth)
                 }
                 VStack(spacing: 0) {
                     if !workspace.tabs.isEmpty {
                         TabBarView()
-                        Divider()
                     }
                     PreviewContainerView()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -33,7 +33,7 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(AppBackgroundView())
         .preferredColorScheme(colorScheme)
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers)
@@ -74,12 +74,40 @@ struct ContentView: View {
     }
 }
 
+private struct AppBackgroundView: View {
+    var body: some View {
+        Color(nsColor: .windowBackgroundColor)
+            .ignoresSafeArea()
+    }
+}
+
+private struct GlassPanelModifier: ViewModifier {
+    var material: Material = .regularMaterial
+    var cornerRadius: CGFloat = 8
+
+    func body(content: Content) -> some View {
+        content
+            .background(material, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(Color(nsColor: .separatorColor).opacity(0.55), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.08), radius: 18, y: 6)
+    }
+}
+
+private extension View {
+    func glassPanel(material: Material = .regularMaterial, cornerRadius: CGFloat = 8) -> some View {
+        modifier(GlassPanelModifier(material: material, cornerRadius: cornerRadius))
+    }
+}
+
 private struct SidebarResizeHandle: View {
     @Binding var width: Double?
 
     var body: some View {
         AppKitSidebarResizeHandle(width: $width)
-            .frame(width: 28)
+            .frame(width: 18)
     }
 }
 
@@ -156,7 +184,7 @@ private final class SidebarResizeHandleView: NSView {
 
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
-        NSColor.separatorColor.setFill()
+        NSColor.separatorColor.withAlphaComponent(0.55).setFill()
         NSRect(x: floor(bounds.midX), y: 0, width: 1, height: bounds.height).fill()
     }
 
@@ -171,51 +199,32 @@ private struct ToolbarView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
 
     var body: some View {
-        HStack(spacing: 10) {
-            Button {
+        HStack(spacing: 8) {
+            ToolbarIconButton(
+                title: workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar",
+                systemImage: "sidebar.left"
+            ) {
                 workspace.setSidebarVisible(!workspace.settings.isSidebarVisible)
-            } label: {
-                Label("Toggle Sidebar", systemImage: workspace.settings.isSidebarVisible ? "sidebar.left" : "sidebar.left")
             }
-            .labelStyle(.iconOnly)
-            .help(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar")
 
-            Button {
+            ToolbarIconButton(title: "Open Folder", systemImage: "folder") {
                 workspace.openDirectoryPanel()
-            } label: {
-                Label("Open Folder", systemImage: "folder")
             }
-            .labelStyle(.iconOnly)
-            .help("Open Folder")
 
-            Button {
+            ToolbarIconButton(title: "Open File", systemImage: "doc") {
                 workspace.openFilePanel()
-            } label: {
-                Label("Open File", systemImage: "doc")
             }
-            .labelStyle(.iconOnly)
-            .help("Open File")
 
-            Button {
+            ToolbarIconButton(
+                title: "Refresh",
+                systemImage: "arrow.clockwise",
+                isDisabled: workspace.selectedTab == nil
+            ) {
                 workspace.refreshSelectedTab()
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
             }
-            .labelStyle(.iconOnly)
-            .disabled(workspace.selectedTab == nil)
-            .help("Refresh")
 
-            if let rootURL = workspace.rootURL {
-                Text(rootURL.path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            } else {
-                Text("Open a folder or Markdown file")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            WorkspacePathView()
+                .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
 
             Spacer()
 
@@ -226,8 +235,10 @@ private struct ToolbarView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 260)
+            .controlSize(.small)
+            .frame(width: 232)
             .help("Preview Width")
+            .accessibilityLabel("Preview Width")
 
             Picker("Font Size", selection: settingsBinding(\.fontSize)) {
                 ForEach(fontSizes, id: \.self) { size in
@@ -235,8 +246,10 @@ private struct ToolbarView: View {
                 }
             }
             .labelsHidden()
+            .controlSize(.small)
             .frame(width: 82)
             .help("Font Size")
+            .accessibilityLabel("Font Size")
 
             Picker("Font", selection: settingsBinding(\.fontFamily)) {
                 ForEach(fontOptions, id: \.id) { option in
@@ -244,8 +257,10 @@ private struct ToolbarView: View {
                 }
             }
             .labelsHidden()
-            .frame(width: 150)
+            .controlSize(.small)
+            .frame(width: 140)
             .help("Font")
+            .accessibilityLabel("Font")
 
             Picker("Theme", selection: settingsBinding(\.theme)) {
                 Text("System").tag(AppTheme.system)
@@ -253,11 +268,14 @@ private struct ToolbarView: View {
                 Text("Dark").tag(AppTheme.dark)
             }
             .labelsHidden()
+            .controlSize(.small)
             .frame(width: 110)
             .help("Theme")
+            .accessibilityLabel("Theme")
         }
-        .padding(.horizontal, 12)
-        .frame(height: 42)
+        .padding(.horizontal, 8)
+        .frame(height: 46)
+        .glassPanel(material: .bar)
     }
 
     private var fontSizes: [Double] {
@@ -287,6 +305,74 @@ private struct ToolbarView: View {
     }
 }
 
+private struct ToolbarIconButton: View {
+    let title: String
+    let systemImage: String
+    var isDisabled = false
+    let action: () -> Void
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(.primary)
+                .frame(width: 30, height: 30)
+                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .opacity(isDisabled ? 0.42 : 1)
+        .background(
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(isHovered && !isDisabled ? Color.primary.opacity(0.08) : Color.clear)
+        )
+        .onHover { isHovered = $0 }
+        .help(title)
+        .accessibilityLabel(title)
+    }
+}
+
+private struct WorkspacePathView: View {
+    @EnvironmentObject private var workspace: WorkspaceModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: workspace.rootURL == nil ? "doc.text.magnifyingglass" : "folder")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(subtitle)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .padding(.leading, 4)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(title)
+    }
+
+    private var title: String {
+        guard let rootURL = workspace.rootURL else {
+            return "No Workspace"
+        }
+        return rootURL.lastPathComponent.isEmpty ? rootURL.path : rootURL.lastPathComponent
+    }
+
+    private var subtitle: String {
+        workspace.rootURL?.path ?? "Open a folder or Markdown file"
+    }
+}
+
 private struct FontOption: Hashable {
     let id: String
     let name: String
@@ -298,6 +384,7 @@ private struct SidebarView: View {
     var body: some View {
         VStack(spacing: 0) {
             if let rootURL = workspace.rootURL {
+                SidebarHeaderView(rootURL: rootURL)
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         DirectoryNodeView(
@@ -313,12 +400,40 @@ private struct SidebarView: View {
                         )
                         .id(rootURL)
                     }
-                    .padding(.vertical, 6)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 12)
                 }
             } else {
                 EmptySidebarView()
             }
         }
+        .background(.thinMaterial)
+        .overlay(alignment: .trailing) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.4))
+                .frame(width: 1)
+        }
+    }
+}
+
+private struct SidebarHeaderView: View {
+    let rootURL: URL
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Workspace")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            Text(rootURL.lastPathComponent.isEmpty ? rootURL.path : rootURL.lastPathComponent)
+                .font(.system(size: 15, weight: .semibold))
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
     }
 }
 
@@ -328,13 +443,14 @@ private struct EmptySidebarView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "folder.badge.plus")
-                .font(.system(size: 34))
+                .font(.system(size: 34, weight: .medium))
                 .foregroundStyle(.secondary)
             Text("No workspace")
-                .font(.headline)
+                .font(.system(size: 15, weight: .semibold))
             Button("Open Folder") {
                 workspace.openDirectoryPanel()
             }
+            .controlSize(.small)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding()
@@ -435,11 +551,17 @@ private struct FileRowView: View {
     let item: FileItem
     let level: Int
     var isExpanded: Bool = false
+    @State private var isHovered = false
 
     var body: some View {
         HStack(spacing: 6) {
+            Image(systemName: disclosureIcon)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .frame(width: 10)
+                .opacity(item.isDirectory ? 1 : 0)
             Image(systemName: icon)
-                .font(.system(size: 13))
+                .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(iconColor)
                 .frame(width: 16)
             Text(item.name)
@@ -448,11 +570,15 @@ private struct FileRowView: View {
             Spacer(minLength: 0)
         }
         .font(.system(size: 13))
-        .padding(.leading, CGFloat(level) * 18 + 8)
+        .padding(.leading, CGFloat(level) * 16 + 8)
         .padding(.trailing, 8)
-        .frame(height: 26)
-        .contentShape(Rectangle())
-        .background(isSelected ? Color.accentColor.opacity(0.18) : Color.clear)
+        .frame(maxWidth: .infinity, minHeight: 28, maxHeight: 28, alignment: .leading)
+        .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .fill(rowBackground)
+        }
+        .onHover { isHovered = $0 }
     }
 
     private var isSelected: Bool {
@@ -474,6 +600,10 @@ private struct FileRowView: View {
         }
     }
 
+    private var disclosureIcon: String {
+        isExpanded ? "chevron.down" : "chevron.right"
+    }
+
     private var iconColor: Color {
         switch item.kind {
         case .directory:
@@ -488,6 +618,16 @@ private struct FileRowView: View {
             return .secondary
         }
     }
+
+    private var rowBackground: Color {
+        if isSelected {
+            return Color.accentColor.opacity(0.18)
+        }
+        if isHovered {
+            return Color.primary.opacity(0.06)
+        }
+        return .clear
+    }
 }
 
 private struct TabBarView: View {
@@ -495,43 +635,85 @@ private struct TabBarView: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 0) {
+            HStack(spacing: 6) {
                 ForEach(workspace.tabs) { tab in
-                    HStack(spacing: 8) {
-                        Button {
-                            workspace.selectedTabID = tab.id
-                        } label: {
-                            Text(tab.title)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .frame(maxWidth: 180)
-                        }
-                        .buttonStyle(.plain)
-
-                        Button {
-                            workspace.closeTab(tab.id)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Close")
-                    }
-                    .padding(.horizontal, 10)
-                    .frame(height: 34)
-                    .background(tab.id == workspace.selectedTabID ? Color(nsColor: .textBackgroundColor) : Color.clear)
-                    .overlay(alignment: .bottom) {
-                        if tab.id == workspace.selectedTabID {
-                            Rectangle()
-                                .fill(Color.accentColor)
-                                .frame(height: 2)
-                        }
-                    }
-                    Divider()
+                    TabChipView(tab: tab, isSelected: tab.id == workspace.selectedTabID)
                 }
             }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
         }
-        .frame(height: 34)
+        .frame(height: 46)
+        .background(.ultraThinMaterial)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color(nsColor: .separatorColor).opacity(0.35))
+                .frame(height: 1)
+        }
+    }
+}
+
+private struct TabChipView: View {
+    @EnvironmentObject private var workspace: WorkspaceModel
+    let tab: OpenTab
+    let isSelected: Bool
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Button {
+                workspace.selectedTabID = tab.id
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "doc.text")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                    Text(tab.title)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 170)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Select \(tab.title)")
+
+            Button {
+                workspace.closeTab(tab.id)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 16, height: 16)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .opacity(isSelected || isHovered ? 1 : 0.65)
+            .help("Close")
+            .accessibilityLabel("Close \(tab.title)")
+        }
+        .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+        .padding(.leading, 10)
+        .padding(.trailing, 7)
+        .frame(height: 30)
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(backgroundColor)
+        }
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(isSelected ? Color.accentColor.opacity(0.24) : Color.clear, lineWidth: 1)
+        }
+        .onHover { isHovered = $0 }
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return Color(nsColor: .textBackgroundColor).opacity(0.9)
+        }
+        if isHovered {
+            return Color.primary.opacity(0.06)
+        }
+        return Color.clear
     }
 }
 
@@ -542,31 +724,20 @@ private struct PreviewContainerView: View {
         ZStack {
             if let tab = workspace.selectedTab {
                 if let payload = tab.payload {
+                    RenderingPlaceholderView(title: tab.title)
                     RendererWebView(workspace: workspace, payload: payload)
                         .id(tab.id)
                 } else {
                     VStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 32))
+                            .font(.system(size: 32, weight: .medium))
                             .foregroundStyle(.secondary)
                         Text(tab.errorMessage ?? "Unable to preview this file.")
                             .foregroundStyle(.secondary)
                     }
                 }
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "doc.text.magnifyingglass")
-                        .font(.system(size: 42))
-                        .foregroundStyle(.secondary)
-                    Text("Select a file to preview")
-                        .foregroundStyle(.secondary)
-                    if let statusMessage = workspace.statusMessage {
-                        Text(statusMessage)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .multilineTextAlignment(.center)
-                    }
-                }
+                EmptyPreviewView()
             }
             if let statusMessage = workspace.statusMessage, workspace.selectedTab != nil {
                 VStack {
@@ -576,12 +747,90 @@ private struct PreviewContainerView: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
-                        .background(.regularMaterial)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                        .glassPanel(material: .regularMaterial, cornerRadius: 8)
                         .padding(12)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .textBackgroundColor))
+    }
+}
+
+private struct EmptyPreviewView: View {
+    @EnvironmentObject private var workspace: WorkspaceModel
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 42, weight: .medium))
+                .foregroundStyle(.secondary)
+
+            VStack(spacing: 4) {
+                Text("Open Document")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text("Choose a Markdown file or workspace folder to start previewing.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    workspace.openFilePanel()
+                } label: {
+                    Label("Open Document", systemImage: "doc")
+                }
+                .controlSize(.large)
+                .keyboardShortcut(.defaultAction)
+
+                Button {
+                    workspace.openDirectoryPanel()
+                } label: {
+                    Label("Open Folder", systemImage: "folder")
+                }
+                .controlSize(.large)
+            }
+            .padding(.top, 4)
+
+            if let statusMessage = workspace.statusMessage {
+                Text(statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 360)
+            }
+        }
+        .padding(28)
+        .glassPanel(material: .thinMaterial, cornerRadius: 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(28)
+    }
+}
+
+private struct RenderingPlaceholderView: View {
+    let title: String
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ProgressView()
+                .controlSize(.small)
+            VStack(spacing: 4) {
+                Text("Rendering document")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(.primary)
+                Text(title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: 280)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 18)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Rendering document")
     }
 }
