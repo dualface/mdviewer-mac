@@ -1,111 +1,125 @@
-import MarkdownIt from 'markdown-it';
-import anchor from 'markdown-it-anchor';
-import deflist from 'markdown-it-deflist';
-import footnote from 'markdown-it-footnote';
-import taskLists from 'markdown-it-task-lists';
-import katexPlugin from '@vscode/markdown-it-katex';
 import DOMPurify from 'dompurify';
 import mermaid from 'mermaid';
 import hljs from 'highlight.js/lib/common';
-import katex from 'katex';
+import MarkdownWorker from './markdownWorker.js?worker&inline';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 import './styles.css';
 
 const preview = document.getElementById('preview');
 let currentPayload = null;
-const markdownItKatex = katexPlugin.default ?? katexPlugin;
+let activeRenderToken = null;
+let activeMarkdownWorker = null;
+
+class RenderCancelledError extends Error {
+  constructor(renderID) {
+    super(`Render ${renderID ?? ''} was cancelled.`);
+    this.name = 'RenderCancelledError';
+  }
+}
+
+function createRenderToken(renderID) {
+  return {
+    renderID,
+    isCancelled: false,
+  };
+}
+
+function cancelActiveRender(renderID) {
+  if (!activeRenderToken) {
+    return false;
+  }
+  if (renderID !== undefined && activeRenderToken.renderID !== renderID) {
+    return false;
+  }
+  activeRenderToken.isCancelled = true;
+  cancelMarkdownWorker(activeRenderToken);
+  return true;
+}
+
+function assertRenderActive(token) {
+  if (!token || token.isCancelled || activeRenderToken !== token) {
+    throw new RenderCancelledError(token?.renderID);
+  }
+}
+
+function isRenderCancelled(error) {
+  return error instanceof RenderCancelledError;
+}
+
+function shouldAbortRender(error, token) {
+  return isRenderCancelled(error) || token?.isCancelled || activeRenderToken !== token;
+}
 
 window.addEventListener('error', (event) => {
-  postMessage('renderError', event.message || 'Renderer JavaScript error');
+  if (isRenderCancelled(event.error)) {
+    return;
+  }
+  if (activeRenderToken) {
+    return;
+  }
+  postRenderError(event.message || 'Renderer JavaScript error');
 });
 
 window.addEventListener('unhandledrejection', (event) => {
+  if (isRenderCancelled(event.reason)) {
+    return;
+  }
+  if (activeRenderToken) {
+    return;
+  }
   const reason = event.reason?.message || String(event.reason || 'Unhandled renderer rejection');
-  postMessage('renderError', reason);
+  postRenderError(reason);
 });
 
-const md = new MarkdownIt({
-  html: false,
-  linkify: true,
-  typographer: false,
-  breaks: true,
-  highlight(code, language) {
-    const lang = language && hljs.getLanguage(language) ? language : '';
-    if (lang) {
-      try {
-        return `<pre><code class="hljs language-${escapeAttr(lang)}">${hljs.highlight(code, { language: lang }).value}</code></pre>`;
-      } catch {
-        return `<pre><code class="hljs">${escapeHtml(code)}</code></pre>`;
-      }
-    }
-    return `<pre><code class="hljs">${escapeHtml(code)}</code></pre>`;
-  },
-})
-  .use(anchor, { permalink: anchor.permalink.headerLink() })
-  .use(deflist)
-  .use(footnote)
-  .use(taskLists, { enabled: true, label: true, labelAfter: true })
-  .use(markdownItKatex, {
-    katex,
-    throwOnError: false,
-    errorColor: '#b42318',
-    macros: {
-      '\\label': { tokens: [], numArgs: 1 },
-    },
-  });
-
-const defaultFence = md.renderer.rules.fence;
-md.renderer.rules.fence = (tokens, idx, options, env, self) => {
-  const token = tokens[idx];
-  const info = token.info ? token.info.trim().split(/\s+/)[0].toLowerCase() : '';
-  if (info === 'mermaid') {
-    return `<pre class="mermaid-source"><code>${escapeHtml(token.content)}</code></pre>`;
-  }
-  return defaultFence(tokens, idx, options, env, self);
-};
-
-const defaultImage = md.renderer.rules.image;
-md.renderer.rules.image = (tokens, idx, options, env, self) => {
-  const token = tokens[idx];
-  const srcIndex = token.attrIndex('src');
-  if (srcIndex >= 0) {
-    const src = token.attrs[srcIndex][1];
-    token.attrs[srcIndex][1] = resolveAssetURL(src, env.filePath);
-  }
-  return defaultImage(tokens, idx, options, env, self);
-};
-
-const defaultLinkOpen = md.renderer.rules.link_open || ((tokens, idx, options, env, self) => self.renderToken(tokens, idx, options));
-md.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-  const token = tokens[idx];
-  const hrefIndex = token.attrIndex('href');
-  if (hrefIndex >= 0) {
-    token.attrSet('data-mdviewer-link', token.attrs[hrefIndex][1]);
-  }
-  return defaultLinkOpen(tokens, idx, options, env, self);
-};
-
 window.MDViewer = {
+  lastStartedRenderID: 0,
+  lastCompletedRenderID: 0,
+
+  get isRendering() {
+    return Boolean(activeRenderToken);
+  },
+
+  cancelRender(renderID) {
+    return cancelActiveRender(renderID);
+  },
+
   async render(payload, renderID) {
+    cancelActiveRender();
+    const token = createRenderToken(renderID);
+    activeRenderToken = token;
+    this.lastStartedRenderID = renderID;
+    this.lastCompletedRenderID = 0;
     currentPayload = payload;
     try {
+      assertRenderActive(token);
       applySettings(payload);
       if (payload.kind === 'markdown') {
-        await renderMarkdown(payload);
+        await renderMarkdown(payload, token);
       } else if (payload.kind === 'image') {
-        renderImage(payload);
+        renderImage(payload, token);
       } else if (payload.kind === 'text') {
-        renderText(payload);
+        renderText(payload, token);
       } else {
-        renderUnsupported(payload);
+        renderUnsupported(payload, token);
       }
     } catch (error) {
-      postMessage('renderError', error.message);
+      if (shouldAbortRender(error, token)) {
+        return;
+      }
+      postRenderError(error.message, token);
       preview.innerHTML = `<div class="error">Render error: ${escapeHtml(error.message)}</div>`;
     } finally {
-      await waitForPaint();
-      postMessage('renderComplete', { renderID });
+      if (!token.isCancelled && activeRenderToken === token) {
+        this.lastCompletedRenderID = Math.max(this.lastCompletedRenderID, renderID);
+        await waitForPaint(token);
+        if (!token.isCancelled && activeRenderToken === token) {
+          postMessage('renderComplete', { renderID });
+        }
+      }
+      if (activeRenderToken === token) {
+        activeRenderToken = null;
+      }
     }
   },
 };
@@ -126,21 +140,100 @@ function applySettings(payload) {
   });
 }
 
-async function renderMarkdown(payload) {
+async function renderMarkdown(payload, token) {
   try {
-    const html = md.render(payload.markdown || '', { filePath: payload.filePath });
-    preview.innerHTML = DOMPurify.sanitize(html, {
+    assertRenderActive(token);
+    const html = await renderMarkdownInWorker(payload, token);
+    assertRenderActive(token);
+    const sanitized = DOMPurify.sanitize(html, {
       ADD_ATTR: ['target', 'rel', 'data-mdviewer-link'],
     });
+    assertRenderActive(token);
+    preview.innerHTML = sanitized;
     bindLinks(payload.filePath);
-    await renderMermaidBlocks();
+    await renderMermaidBlocks(token);
   } catch (error) {
-    postMessage('renderError', error.message);
+    if (shouldAbortRender(error, token)) {
+      throw error;
+    }
+    postRenderError(error.message, token);
     preview.innerHTML = `<div class="error">Markdown render error: ${escapeHtml(error.message)}</div>`;
   }
 }
 
-function renderImage(payload) {
+function renderMarkdownInWorker(payload, token) {
+  return new Promise((resolve, reject) => {
+    assertRenderActive(token);
+    if (typeof Worker === 'undefined') {
+      reject(new Error('Markdown worker is unavailable.'));
+      return;
+    }
+
+    const worker = new MarkdownWorker();
+    const session = {
+      token,
+      worker,
+      reject,
+      isFinished: false,
+    };
+    activeMarkdownWorker = session;
+
+    worker.onmessage = (event) => {
+      const data = event.data || {};
+      if (data.renderID !== token.renderID) {
+        return;
+      }
+      if (token.isCancelled || activeRenderToken !== token) {
+        finishMarkdownWorker(session, () => reject(new RenderCancelledError(token.renderID)));
+        return;
+      }
+      if (data.type === 'renderedMarkdown') {
+        finishMarkdownWorker(session, () => resolve(data.html || ''));
+        return;
+      }
+      finishMarkdownWorker(session, () => reject(new Error(data.message || 'Markdown worker failed.')));
+    };
+
+    worker.onerror = (event) => {
+      finishMarkdownWorker(session, () => reject(new Error(event.message || 'Markdown worker failed.')));
+    };
+
+    worker.postMessage({
+      type: 'renderMarkdown',
+      renderID: token.renderID,
+      payload: {
+        markdown: payload.markdown || '',
+        filePath: payload.filePath || '',
+      },
+    });
+  });
+}
+
+function cancelMarkdownWorker(token) {
+  const session = activeMarkdownWorker;
+  if (!session || session.token !== token) {
+    return false;
+  }
+  finishMarkdownWorker(session, () => session.reject(new RenderCancelledError(token.renderID)));
+  return true;
+}
+
+function finishMarkdownWorker(session, complete) {
+  if (session.isFinished) {
+    return;
+  }
+  session.isFinished = true;
+  if (activeMarkdownWorker === session) {
+    activeMarkdownWorker = null;
+  }
+  session.worker.onmessage = null;
+  session.worker.onerror = null;
+  session.worker.terminate();
+  complete();
+}
+
+function renderImage(payload, token) {
+  assertRenderActive(token);
   const src = payload.mediaURL || resolveAssetURL(payload.filePath, payload.filePath);
   preview.innerHTML = `
     <div class="media-preview">
@@ -149,7 +242,8 @@ function renderImage(payload) {
     </div>`;
 }
 
-function renderText(payload) {
+function renderText(payload, token) {
+  assertRenderActive(token);
   const language = payload.language && hljs.getLanguage(payload.language) ? payload.language : '';
   const highlighted = language
     ? hljs.highlight(payload.content || '', { language }).value
@@ -160,7 +254,8 @@ function renderText(payload) {
     </div>`;
 }
 
-function renderUnsupported(payload) {
+function renderUnsupported(payload, token) {
+  assertRenderActive(token);
   preview.innerHTML = `
     <div class="unsupported">
       <div class="unsupported-title">Unsupported file type</div>
@@ -168,18 +263,23 @@ function renderUnsupported(payload) {
     </div>`;
 }
 
-async function renderMermaidBlocks() {
+async function renderMermaidBlocks(token) {
   const blocks = [...preview.querySelectorAll('.mermaid-source')];
   for (const block of blocks) {
+    assertRenderActive(token);
     const code = (block.textContent || '').trim();
     try {
       const id = `mermaid-${crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2)}`;
       const { svg } = await mermaid.render(id, code);
+      assertRenderActive(token);
       const wrapper = document.createElement('div');
       wrapper.className = 'mermaid';
       wrapper.innerHTML = svg;
       block.replaceWith(wrapper);
     } catch (error) {
+      if (shouldAbortRender(error, token)) {
+        throw error;
+      }
       const pre = document.createElement('pre');
       pre.className = 'diagram-error';
       pre.textContent = `Mermaid render error: ${error.message}`;
@@ -237,9 +337,31 @@ function postMessage(name, body) {
   window.webkit?.messageHandlers?.[name]?.postMessage(body);
 }
 
-function waitForPaint() {
+function postRenderError(message, token = activeRenderToken) {
+  const body = { message: String(message || 'Renderer JavaScript error') };
+  if (token?.renderID !== undefined) {
+    body.renderID = token.renderID;
+  }
+  postMessage('renderError', body);
+}
+
+function waitForPaint(token) {
   return new Promise((resolve) => {
-    requestAnimationFrame(() => requestAnimationFrame(resolve));
+    if (token?.isCancelled) {
+      resolve();
+      return;
+    }
+
+    let isResolved = false;
+    const finish = () => {
+      if (!isResolved) {
+        isResolved = true;
+        resolve();
+      }
+    };
+
+    setTimeout(finish, 250);
+    requestAnimationFrame(() => requestAnimationFrame(finish));
   });
 }
 
