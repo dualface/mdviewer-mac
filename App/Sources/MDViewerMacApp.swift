@@ -85,6 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         urls.forEach { workspace.openDocumentURL($0) }
+        activateDocumentWindow()
     }
 
     @MainActor
@@ -104,6 +105,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 WindowPlacement.ensureVisible(window)
             }
         }
+    }
+
+    @MainActor
+    private func activateDocumentWindow() {
+        NSApp.activate(ignoringOtherApps: true)
+        guard let window = NSApp.windows.first(where: { $0.canBecomeKey }) else {
+            return
+        }
+        WindowPlacement.ensureVisible(window)
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
     }
 }
 

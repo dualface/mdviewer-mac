@@ -40,15 +40,19 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.rootURL, tempRoot.standardizedFileURL.resolvingSymlinksInPath())
     }
 
-    func testOpeningSameDocumentSelectsExistingTab() throws {
+    func testOpeningSameDocumentSelectsAndRefreshesExistingTab() throws {
         let model = WorkspaceModel()
         let one = tempRoot.appendingPathComponent("one.md")
 
         model.openDocumentURL(one)
         let firstTabID = try XCTUnwrap(model.selectedTabID)
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+
+        try "# Changed".write(to: one, atomically: true, encoding: .utf8)
         model.openDocumentURL(one.standardizedFileURL)
 
         XCTAssertEqual(model.tabs.count, 1)
         XCTAssertEqual(model.selectedTabID, firstTabID)
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Changed")
     }
 }

@@ -168,6 +168,7 @@ final class WorkspaceModel: ObservableObject {
         let previewKind = FileTypeDetector.previewKind(for: kind)
         if let existing = tabs.first(where: { canonicalURL($0.url) == canonical }) {
             selectedTabID = existing.id
+            refresh(tabID: existing.id)
             persistWorkspace()
             return
         }

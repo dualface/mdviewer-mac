@@ -29,6 +29,7 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         LSApplicationCategoryType: public.app-category.productivity
         LSMinimumSystemVersion: "14.0"
+        LSMultipleInstancesProhibited: true
         NSSupportsAutomaticTermination: true
         NSSupportsSuddenTermination: true
         CFBundleDocumentTypes:
