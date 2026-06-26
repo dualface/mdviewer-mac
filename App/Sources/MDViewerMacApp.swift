@@ -23,110 +23,189 @@ struct MDViewerMacApp: App {
         }
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("Open File...") {
+                Button {
                     workspace.openFilePanel()
+                } label: {
+                    Label("Open File...", systemImage: "doc")
                 }
                 .keyboardShortcut("o", modifiers: [.command])
 
-                Button("Open Folder...") {
+                Button {
                     workspace.openDirectoryPanel()
+                } label: {
+                    Label("Open Folder...", systemImage: "folder")
                 }
                 .keyboardShortcut("e", modifiers: [.command])
 
                 Divider()
 
-                Button("Close File") {
+                Button {
                     workspace.closeSelectedTab()
+                } label: {
+                    Label("Close File", systemImage: "xmark.circle")
                 }
                 .keyboardShortcut("w", modifiers: [.command])
                 .disabled(workspace.selectedTab == nil)
 
-                Button("Close Other Files") {
+                Button {
                     workspace.closeOtherTabs()
+                } label: {
+                    Label("Close Other Files", systemImage: "rectangle.stack.badge.minus")
                 }
                 .keyboardShortcut("w", modifiers: [.command, .option])
                 .disabled(workspace.selectedTab == nil || workspace.tabs.count <= 1)
 
-                Button("Close All Files") {
+                Button {
                     workspace.closeAllTabs()
+                } label: {
+                    Label("Close All Files", systemImage: "xmark.circle.fill")
                 }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
                 .disabled(workspace.tabs.isEmpty)
             }
 
             CommandGroup(replacing: .sidebar) {
-                Button("Refresh") {
+                Button {
                     workspace.refreshSelectedTab()
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
                 }
                 .keyboardShortcut("r", modifiers: [.command])
 
-                Menu("Theme") {
+                Menu {
                     ForEach(AppTheme.allCases, id: \.self) { theme in
-                        Button(theme.label) {
+                        Button {
                             workspace.setTheme(theme)
+                        } label: {
+                            Label(theme.label, systemImage: theme.menuSystemImage)
                         }
                         .disabled(workspace.settings.theme == theme)
                     }
+                } label: {
+                    Label("Theme", systemImage: "circle.lefthalf.filled")
                 }
 
                 Divider()
 
-                Menu("Preview Width") {
+                Menu {
                     ForEach(previewWidthShortcuts, id: \.width) { shortcut in
-                        Button(shortcut.width.label) {
+                        Button {
                             workspace.setPreviewWidth(shortcut.width)
+                        } label: {
+                            Label(shortcut.width.label, systemImage: shortcut.width.menuSystemImage)
                         }
                         .keyboardShortcut(KeyEquivalent(shortcut.key), modifiers: [.option])
                         .disabled(workspace.settings.previewWidth == shortcut.width)
                     }
+                } label: {
+                    Label("Preview Width", systemImage: "arrow.left.and.right")
                 }
 
                 Divider()
 
-                Menu("Preview Font") {
-                    Menu("Size") {
+                Menu {
+                    Menu {
                         ForEach(PreviewFont.sizes, id: \.self) { size in
-                            Button("\(Int(size))px") {
+                            Button {
                                 workspace.setPreviewFontSize(size)
+                            } label: {
+                                Label("\(Int(size))px", systemImage: "textformat.size")
                             }
                             .disabled(workspace.settings.fontSize == size)
                         }
+                    } label: {
+                        Label("Size", systemImage: "textformat.size")
                     }
 
                     Divider()
 
-                    Menu("Family") {
+                    Menu {
                         ForEach(PreviewFont.options) { option in
-                            Button(option.label) {
+                            Button {
                                 workspace.setPreviewFontFamily(option.id)
+                            } label: {
+                                Label(option.label, systemImage: option.menuSystemImage)
                             }
                             .disabled(workspace.settings.fontFamily == option.id)
                         }
+                    } label: {
+                        Label("Family", systemImage: "textformat")
                     }
+                } label: {
+                    Label("Preview Font", systemImage: "textformat")
                 }
 
                 Divider()
 
-                Button(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                Button {
                     workspace.toggleSidebar()
+                } label: {
+                    Label(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
                 }
                 .keyboardShortcut("b", modifiers: [.command])
 
-                Button(workspace.settings.isToolbarVisible ? "Hide Toolbar" : "Show Toolbar") {
+                Button {
                     workspace.toggleToolbar()
+                } label: {
+                    Label(workspace.settings.isToolbarVisible ? "Hide Toolbar" : "Show Toolbar", systemImage: "menubar.rectangle")
                 }
                 .keyboardShortcut("t", modifiers: [.command, .shift])
             }
 
             CommandGroup(after: .windowArrangement) {
                 ForEach(0..<10, id: \.self) { index in
-                    Button("Select File \(index + 1)") {
+                    Button {
                         workspace.selectTab(at: index)
+                    } label: {
+                        Label("Select File \(index + 1)", systemImage: "doc.text")
                     }
                     .keyboardShortcut(KeyEquivalent(tabShortcutKeys[index]), modifiers: [.command])
                     .disabled(workspace.tabs.count <= index)
                 }
             }
+        }
+    }
+}
+
+private extension AppTheme {
+    var menuSystemImage: String {
+        switch self {
+        case .system:
+            return "circle.lefthalf.filled"
+        case .light:
+            return "sun.max"
+        case .dark:
+            return "moon"
+        }
+    }
+}
+
+private extension PreviewWidth {
+    var menuSystemImage: String {
+        switch self {
+        case .full:
+            return "arrow.left.and.right"
+        case .wide:
+            return "rectangle"
+        case .medium:
+            return "rectangle.center.inset.filled"
+        case .narrow:
+            return "sidebar.right"
+        }
+    }
+}
+
+private extension PreviewFontOption {
+    var menuSystemImage: String {
+        switch id {
+        case FontFamily.systemID:
+            return "textformat"
+        case FontFamily.serifID:
+            return "textformat.alt"
+        case FontFamily.monospaceID, "Menlo":
+            return "curlybraces"
+        default:
+            return "textformat.abc"
         }
     }
 }
