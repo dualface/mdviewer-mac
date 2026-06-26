@@ -5,14 +5,15 @@ export default defineConfig({
   build: {
     outDir: '../App/Resources/Renderer',
     assetsDir: 'assets',
+    chunkSizeWarningLimit: 5000,
     cssCodeSplit: false,
     modulePreload: false,
-    rollupOptions: {
+    rolldownOptions: {
       output: {
         entryFileNames: 'assets/[name].js',
         chunkFileNames: 'assets/[name].js',
         assetFileNames: 'assets/[name][extname]',
-        inlineDynamicImports: true,
+        codeSplitting: false,
       },
     },
   },

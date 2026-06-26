@@ -1,8 +1,9 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 const rendererRoot = new URL('../../App/Resources/Renderer/', import.meta.url);
 const rendererHtml = new URL('index.html', rendererRoot);
 const rendererScript = new URL('assets/index.js', rendererRoot);
+const rendererAssets = new URL('assets/', rendererRoot);
 let html = readFileSync(rendererHtml, 'utf8');
 
 html = html
@@ -18,3 +19,17 @@ script = script.replaceAll(
   '(document.currentScript && document.currentScript.src || document.baseURI)'
 );
 writeFileSync(rendererScript, script);
+
+trimTrailingWhitespace(rendererRoot);
+trimTrailingWhitespace(rendererAssets);
+
+function trimTrailingWhitespace(directory) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (!entry.isFile() || !/\.(html|css|js)$/i.test(entry.name)) {
+      continue;
+    }
+    const file = new URL(entry.name, directory);
+    const content = readFileSync(file, 'utf8');
+    writeFileSync(file, content.replace(/[ \t]+$/gm, ''));
+  }
+}

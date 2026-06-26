@@ -7,12 +7,14 @@ import katexPlugin from '@vscode/markdown-it-katex';
 import DOMPurify from 'dompurify';
 import mermaid from 'mermaid';
 import hljs from 'highlight.js/lib/common';
+import katex from 'katex';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 import './styles.css';
 
 const preview = document.getElementById('preview');
 let currentPayload = null;
+const markdownItKatex = katexPlugin.default ?? katexPlugin;
 
 window.addEventListener('error', (event) => {
   postMessage('renderError', event.message || 'Renderer JavaScript error');
@@ -44,9 +46,13 @@ const md = new MarkdownIt({
   .use(deflist)
   .use(footnote)
   .use(taskLists, { enabled: true, label: true, labelAfter: true })
-  .use(katexPlugin, {
+  .use(markdownItKatex, {
+    katex,
     throwOnError: false,
     errorColor: '#b42318',
+    macros: {
+      '\\label': { tokens: [], numArgs: 1 },
+    },
   });
 
 const defaultFence = md.renderer.rules.fence;
