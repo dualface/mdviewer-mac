@@ -84,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var workspace: WorkspaceModel?
     private var pendingDocumentURLs: [URL] = []
     private let workspaceInstances = WorkspaceInstanceRegistry()
+    private var closeDocumentShortcutMonitor: Any?
     private var isObservingOpenDocumentRequests = false
 
     @MainActor
@@ -94,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         workspaceInstances.unregister()
         observeOpenDocumentRequests()
+        installCloseDocumentShortcutMonitor()
         restoreVisibleWindowPlacement()
         let didOpenPendingInCurrentInstance = openPendingDocumentURLs()
         if didOpenPendingInCurrentInstance != false {
@@ -121,6 +123,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         workspace?.rootURLDidChange = nil
         workspaceInstances.unregister()
+        if let closeDocumentShortcutMonitor {
+            NSEvent.removeMonitor(closeDocumentShortcutMonitor)
+            self.closeDocumentShortcutMonitor = nil
+        }
         if isObservingOpenDocumentRequests {
             DistributedNotificationCenter.default().removeObserver(
                 self,
@@ -128,6 +134,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 object: Self.notificationObject
             )
         }
+    }
+
+    private func installCloseDocumentShortcutMonitor() {
+        guard closeDocumentShortcutMonitor == nil else {
+            return
+        }
+        closeDocumentShortcutMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleCloseDocumentShortcut(event) ?? event
+        }
+    }
+
+    private func handleCloseDocumentShortcut(_ event: NSEvent) -> NSEvent? {
+        let modifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        guard modifiers == .command,
+              event.charactersIgnoringModifiers?.lowercased() == "w",
+              let workspace,
+              workspace.selectedTab != nil
+        else {
+            return event
+        }
+        workspace.closeSelectedTab()
+        return nil
     }
 
     @MainActor
