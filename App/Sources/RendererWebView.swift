@@ -75,6 +75,7 @@ struct RendererWebView: NSViewRepresentable {
         private var renderID = 0
         private var currentRenderFailed = false
         private var hasDisplayedRender = false
+        private var lastFocusedSelectedTabID: OpenTab.ID?
         private var isActive = true
 
         init(workspace: WorkspaceModel) {
@@ -95,6 +96,7 @@ struct RendererWebView: NSViewRepresentable {
             if didChangeTab || didChangePayload {
                 renderIfReady()
             }
+            focusWebViewIfSelected()
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -242,6 +244,7 @@ struct RendererWebView: NSViewRepresentable {
             latestPayload = nil
             lastRenderedJSON = nil
             lastCompletedRenderID = nil
+            lastFocusedSelectedTabID = nil
         }
 
         func cancelCurrentRender() {
@@ -394,11 +397,53 @@ struct RendererWebView: NSViewRepresentable {
             workspace.statusMessage = message
         }
 
+        private func focusWebViewIfSelected(attempt: Int = 0) {
+            guard isActive,
+                  let latestTabID,
+                  latestTabID == workspace.selectedTabID
+            else {
+                lastFocusedSelectedTabID = nil
+                return
+            }
+            guard lastFocusedSelectedTabID != latestTabID else {
+                return
+            }
+            lastFocusedSelectedTabID = latestTabID
+            DispatchQueue.main.async { [weak self] in
+                self?.focusSelectedWebView(attempt: attempt)
+            }
+        }
+
+        private func focusSelectedWebView(attempt: Int) {
+            guard isActive,
+                  let latestTabID,
+                  latestTabID == workspace.selectedTabID,
+                  let webView
+            else {
+                return
+            }
+            guard let window = webView.window else {
+                guard attempt < Self.maxFocusAttempts else {
+                    return
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.focusRetryInterval) { [weak self] in
+                    self?.focusSelectedWebView(attempt: attempt + 1)
+                }
+                return
+            }
+            if window.firstResponder !== webView {
+                window.makeFirstResponder(webView)
+            }
+            webView.evaluateJavaScript("window.focus();")
+        }
+
         static let renderingAlpha: CGFloat = 0.001
         static let rendererReadyCheckInterval: TimeInterval = 0.05
         static let maxRendererReadyChecks = 40
         static let renderCompletionCheckInterval: TimeInterval = 0.25
         static let maxRenderCompletionChecks = 1200
+        static let focusRetryInterval: TimeInterval = 0.05
+        static let maxFocusAttempts = 20
     }
 
     static let startupErrorScript = """
