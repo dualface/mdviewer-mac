@@ -5,6 +5,12 @@ struct MDViewerMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var workspace = WorkspaceModel()
     private let tabShortcutKeys: [Character] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
+    private let previewWidthShortcuts: [(key: Character, width: PreviewWidth)] = [
+        ("1", .full),
+        ("2", .wide),
+        ("3", .medium),
+        ("4", .narrow),
+    ]
 
     var body: some Scene {
         Window("MarkdownViewer", id: "main") {
@@ -57,6 +63,13 @@ struct MDViewerMacApp: App {
             }
 
             CommandGroup(after: .windowArrangement) {
+                ForEach(previewWidthShortcuts, id: \.width) { shortcut in
+                    Button("Preview Width: \(shortcut.width.label)") {
+                        workspace.setPreviewWidth(shortcut.width)
+                    }
+                    .keyboardShortcut(KeyEquivalent(shortcut.key), modifiers: [.option])
+                }
+
                 ForEach(0..<10, id: \.self) { index in
                     Button("Select File \(index + 1)") {
                         workspace.selectTab(at: index)

@@ -283,10 +283,10 @@ private struct ToolbarView: View {
                     Text(width.label).tag(width)
                 }
             }
-            .pickerStyle(.segmented)
+            .pickerStyle(.menu)
             .labelsHidden()
             .controlSize(.small)
-            .frame(width: 232)
+            .frame(width: 118)
             .help("Preview Width")
             .accessibilityLabel("Preview Width")
 

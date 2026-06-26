@@ -222,6 +222,18 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertTrue(model.settings.isToolbarVisible)
     }
 
+    func testSetPreviewWidthChangesWidth() throws {
+        let model = WorkspaceModel()
+
+        XCTAssertEqual(model.settings.previewWidth, .medium)
+
+        model.setPreviewWidth(.full)
+        XCTAssertEqual(model.settings.previewWidth, .full)
+
+        model.setPreviewWidth(.narrow)
+        XCTAssertEqual(model.settings.previewWidth, .narrow)
+    }
+
     func testOpeningDirectoryURLShowsSidebar() throws {
         let model = WorkspaceModel()
 

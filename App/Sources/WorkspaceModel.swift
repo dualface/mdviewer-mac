@@ -178,6 +178,15 @@ final class WorkspaceModel: ObservableObject {
         settings = updated
     }
 
+    func setPreviewWidth(_ previewWidth: PreviewWidth) {
+        guard settings.previewWidth != previewWidth else {
+            return
+        }
+        var updated = settings
+        updated.previewWidth = previewWidth
+        settings = updated
+    }
+
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
         stopSelectedDocumentMonitor()
         stopAccessingCurrentWorkspace()
