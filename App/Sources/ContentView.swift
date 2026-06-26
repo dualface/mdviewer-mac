@@ -275,10 +275,49 @@ private struct ToolbarView: View {
 
             WorkspacePathView()
                 .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
+
+            Picker("Width", selection: previewWidthBinding) {
+                ForEach(PreviewWidth.allCases, id: \.self) { width in
+                    Text(width.label).tag(width)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: 232)
+            .help("Preview Width")
+            .accessibilityLabel("Preview Width")
+
+            Picker("Font Size", selection: previewFontSizeBinding) {
+                ForEach(PreviewFont.sizes, id: \.self) { size in
+                    Text("\(Int(size))px").tag(size)
+                }
+            }
+            .labelsHidden()
+            .controlSize(.small)
+            .frame(width: 82)
+            .help("Preview Font Size")
+            .accessibilityLabel("Preview Font Size")
         }
         .padding(.horizontal, 8)
         .frame(height: 46)
         .glassPanel(material: .bar)
+    }
+
+    private var previewWidthBinding: Binding<PreviewWidth> {
+        Binding {
+            workspace.settings.previewWidth
+        } set: { width in
+            workspace.setPreviewWidth(width)
+        }
+    }
+
+    private var previewFontSizeBinding: Binding<Double> {
+        Binding {
+            workspace.settings.fontSize
+        } set: { fontSize in
+            workspace.setPreviewFontSize(fontSize)
+        }
     }
 }
 
