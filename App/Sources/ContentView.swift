@@ -809,6 +809,7 @@ private struct PreviewErrorView: View {
 
 private struct EmptyPreviewView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
+    @FocusState private var focusedControl: EmptyPreviewFocus?
 
     var body: some View {
         VStack(spacing: 14) {
@@ -834,6 +835,7 @@ private struct EmptyPreviewView: View {
                 }
                 .controlSize(.large)
                 .keyboardShortcut(.defaultAction)
+                .focused($focusedControl, equals: .openDocument)
 
                 Button {
                     workspace.openDirectoryPanel()
@@ -856,6 +858,24 @@ private struct EmptyPreviewView: View {
         .glassPanel(material: .thinMaterial, cornerRadius: 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(28)
+        .onAppear {
+            focusOpenDocumentButton()
+        }
+        .onChange(of: workspace.tabs.isEmpty) { _, isEmpty in
+            if isEmpty {
+                focusOpenDocumentButton()
+            }
+        }
+    }
+
+    private func focusOpenDocumentButton() {
+        DispatchQueue.main.async {
+            focusedControl = .openDocument
+        }
+    }
+
+    private enum EmptyPreviewFocus: Hashable {
+        case openDocument
     }
 }
 
