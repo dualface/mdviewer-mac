@@ -24,7 +24,7 @@ struct RendererWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
         webView.setValue(false, forKey: "drawsBackground")
-        webView.alphaValue = 0
+        webView.alphaValue = Coordinator.renderingAlpha
         context.coordinator.webView = webView
 
         if let rendererURL = Bundle.main.url(forResource: "index", withExtension: "html", subdirectory: "Renderer"),
@@ -83,6 +83,7 @@ struct RendererWebView: NSViewRepresentable {
                 }
             case "renderError":
                 if let text = message.body as? String {
+                    webView?.alphaValue = 1
                     Task { @MainActor in
                         self.workspace.statusMessage = text
                     }
@@ -98,14 +99,17 @@ struct RendererWebView: NSViewRepresentable {
         }
 
         func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            webView.alphaValue = 1
             workspace.statusMessage = "Renderer load failed: \(error.localizedDescription)"
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            webView.alphaValue = 1
             workspace.statusMessage = "Renderer load failed: \(error.localizedDescription)"
         }
 
         func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String, initiatedByFrame frame: WKFrameInfo) async {
+            webView.alphaValue = 1
             workspace.statusMessage = message
         }
 
@@ -123,7 +127,7 @@ struct RendererWebView: NSViewRepresentable {
             }
             lastRenderedJSON = json
             renderID += 1
-            webView.alphaValue = 0
+            webView.alphaValue = Self.renderingAlpha
             let encoded = data.base64EncodedString()
             let script = """
             (() => {
@@ -136,11 +140,14 @@ struct RendererWebView: NSViewRepresentable {
             """
             webView.evaluateJavaScript(script) { _, error in
                 if let error {
+                    webView.alphaValue = 1
                     Task { @MainActor in
                         self.workspace.statusMessage = "Render failed: \(error.localizedDescription)"
                     }
                 }
             }
         }
+
+        static let renderingAlpha: CGFloat = 0.001
     }
 }
