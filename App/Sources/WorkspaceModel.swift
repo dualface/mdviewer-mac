@@ -333,6 +333,13 @@ final class WorkspaceModel: ObservableObject {
         closeTab(selectedTabID)
     }
 
+    func selectTab(at index: Int) {
+        guard tabs.indices.contains(index) else {
+            return
+        }
+        selectedTabID = tabs[index].id
+    }
+
     func closeAllTabs() {
         guard !tabs.isEmpty else {
             return

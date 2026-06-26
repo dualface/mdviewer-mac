@@ -247,4 +247,48 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertTrue(model.tabs.isEmpty)
         XCTAssertNil(model.selectedTabID)
     }
+
+    func testSelectTabAtIndexSelectsRequestedDocument() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let two = tempRoot.appendingPathComponent("two.md")
+
+        model.openWorkspace(tempRoot)
+        model.openFile(one)
+        model.openFile(two)
+
+        model.selectTab(at: 0)
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "one.md")
+
+        model.selectTab(at: 1)
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "two.md")
+    }
+
+    func testSelectTabAtIndexIgnoresUnavailableIndex() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+
+        model.openDocumentURL(one)
+        let selectedTabID = model.selectedTabID
+
+        model.selectTab(at: 9)
+
+        XCTAssertEqual(model.selectedTabID, selectedTabID)
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "one.md")
+    }
+
+    func testSelectTabAtIndexCanSelectTenthDocument() throws {
+        let model = WorkspaceModel()
+
+        model.openWorkspace(tempRoot)
+        for index in 1...10 {
+            let url = tempRoot.appendingPathComponent("file-\(index).md")
+            try "# \(index)".write(to: url, atomically: true, encoding: .utf8)
+            model.openFile(url)
+        }
+
+        model.selectTab(at: 9)
+
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "file-10.md")
+    }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 struct MDViewerMacApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var workspace = WorkspaceModel()
+    private let tabShortcutKeys: [Character] = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"]
 
     var body: some Scene {
         Window("MarkdownViewer", id: "main") {
@@ -49,6 +50,14 @@ struct MDViewerMacApp: App {
             }
 
             CommandMenu("Tabs") {
+                ForEach(0..<10, id: \.self) { index in
+                    Button("Select File \(index + 1)") {
+                        workspace.selectTab(at: index)
+                    }
+                    .keyboardShortcut(KeyEquivalent(tabShortcutKeys[index]), modifiers: [.command])
+                    .disabled(workspace.tabs.count <= index)
+                }
+
                 Button("Close Other Files") {
                     workspace.closeOtherTabs()
                 }
