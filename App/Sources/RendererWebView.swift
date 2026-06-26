@@ -72,6 +72,7 @@ struct RendererWebView: NSViewRepresentable {
         private var lastRenderedJSON: String?
         private var renderID = 0
         private var currentRenderFailed = false
+        private var hasDisplayedRender = false
         private var isActive = true
 
         init(workspace: WorkspaceModel) {
@@ -123,6 +124,7 @@ struct RendererWebView: NSViewRepresentable {
             guard isActive else {
                 return
             }
+            hasDisplayedRender = true
             webView.alphaValue = 1
             workspace.statusMessage = "Renderer load failed: \(error.localizedDescription)"
         }
@@ -131,6 +133,7 @@ struct RendererWebView: NSViewRepresentable {
             guard isActive else {
                 return
             }
+            hasDisplayedRender = true
             webView.alphaValue = 1
             workspace.statusMessage = "Renderer load failed: \(error.localizedDescription)"
         }
@@ -139,6 +142,7 @@ struct RendererWebView: NSViewRepresentable {
             guard isActive else {
                 return
             }
+            hasDisplayedRender = true
             webView.alphaValue = 1
             workspace.statusMessage = message
         }
@@ -162,7 +166,9 @@ struct RendererWebView: NSViewRepresentable {
             renderID += 1
             let startedRenderID = renderID
             currentRenderFailed = false
-            webView.alphaValue = Self.renderingAlpha
+            if !hasDisplayedRender {
+                webView.alphaValue = Self.renderingAlpha
+            }
             let encoded = data.base64EncodedString()
             let script = """
             (() => {
@@ -192,6 +198,7 @@ struct RendererWebView: NSViewRepresentable {
                 }
                 if let error {
                     self.lastRenderedJSON = previousRenderedJSON
+                    self.hasDisplayedRender = true
                     webView.alphaValue = 1
                     Task { @MainActor in
                         guard self.isActive, self.renderID == startedRenderID else {
@@ -201,6 +208,7 @@ struct RendererWebView: NSViewRepresentable {
                     }
                 } else if let didStart = result as? Bool, !didStart {
                     self.lastRenderedJSON = previousRenderedJSON
+                    self.hasDisplayedRender = true
                     webView.alphaValue = 1
                 } else {
                     self.scheduleRenderCompletionCheck(for: startedRenderID)
@@ -245,6 +253,7 @@ struct RendererWebView: NSViewRepresentable {
             currentRenderFailed = true
             lastRenderedJSON = nil
             let failedRenderID = renderID
+            hasDisplayedRender = true
             webView?.alphaValue = 1
             Task { @MainActor in
                 guard self.isActive, self.renderID == failedRenderID else {
@@ -271,6 +280,7 @@ struct RendererWebView: NSViewRepresentable {
             guard isActive, completedRenderID == renderID else {
                 return
             }
+            hasDisplayedRender = true
             webView?.alphaValue = 1
             if !currentRenderFailed {
                 Task { @MainActor in
@@ -287,8 +297,7 @@ struct RendererWebView: NSViewRepresentable {
                 guard let self,
                       let webView = self.webView,
                       self.isActive,
-                      self.renderID == scheduledRenderID,
-                      webView.alphaValue < 1
+                      self.renderID == scheduledRenderID
                 else {
                     return
                 }
@@ -297,8 +306,7 @@ struct RendererWebView: NSViewRepresentable {
                 webView.evaluateJavaScript(script) { [weak self] result, _ in
                     guard let self,
                           self.isActive,
-                          self.renderID == scheduledRenderID,
-                          webView.alphaValue < 1
+                          self.renderID == scheduledRenderID
                     else {
                         return
                     }
@@ -340,6 +348,7 @@ struct RendererWebView: NSViewRepresentable {
                         self?.checkRendererReady(attempt: attempt + 1)
                     }
                 } else {
+                    self.hasDisplayedRender = true
                     webView.alphaValue = 1
                     Task { @MainActor in
                         guard self.isActive,
@@ -374,6 +383,9 @@ struct RendererWebView: NSViewRepresentable {
         const target = event.target;
         if (target && target !== window && target.tagName === 'SCRIPT') {
           post(`Renderer script failed to load: ${target.src || 'unknown script'}`);
+          return;
+        }
+        if (target && target !== window) {
           return;
         }
         const location = event.filename ? ` (${event.filename}${event.lineno ? `:${event.lineno}` : ''})` : '';
