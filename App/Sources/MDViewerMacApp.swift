@@ -25,7 +25,7 @@ struct MDViewerMacApp: App {
                 Button("Open Folder...") {
                     workspace.openDirectoryPanel()
                 }
-                .keyboardShortcut("o", modifiers: [.command, .shift])
+                .keyboardShortcut("e", modifiers: [.command])
 
                 Button(workspace.selectedTab == nil ? "Close Window" : "Close File") {
                     if workspace.selectedTab == nil {
@@ -37,19 +37,21 @@ struct MDViewerMacApp: App {
                 .keyboardShortcut("w", modifiers: [.command])
             }
 
-            CommandMenu("Preview") {
+            CommandGroup(replacing: .sidebar) {
                 Button(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
                     workspace.toggleSidebar()
                 }
                 .keyboardShortcut("b", modifiers: [.command])
+            }
 
+            CommandGroup(after: .toolbar) {
                 Button("Refresh") {
                     workspace.refreshSelectedTab()
                 }
                 .keyboardShortcut("r", modifiers: [.command])
             }
 
-            CommandMenu("Tabs") {
+            CommandGroup(after: .windowArrangement) {
                 ForEach(0..<10, id: \.self) { index in
                     Button("Select File \(index + 1)") {
                         workspace.selectTab(at: index)
