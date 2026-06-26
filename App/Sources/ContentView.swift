@@ -453,32 +453,18 @@ private struct WorkspacePathView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 16)
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-            }
+            Text(displayPath)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
         .padding(.leading, 4)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
+        .accessibilityLabel(displayPath)
     }
 
-    private var title: String {
-        guard let rootURL = workspace.rootURL else {
-            return "No Workspace"
-        }
-        return rootURL.lastPathComponent.isEmpty ? rootURL.path : rootURL.lastPathComponent
-    }
-
-    private var subtitle: String {
+    private var displayPath: String {
         workspace.rootURL?.path ?? "Open a folder or Markdown file"
     }
 }
