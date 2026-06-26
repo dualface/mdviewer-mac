@@ -711,7 +711,7 @@ private struct TabChipView: View {
     var body: some View {
         HStack(spacing: 7) {
             Button {
-                workspace.selectedTabID = tab.id
+                workspace.selectTab(tab.id)
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text")
@@ -774,8 +774,12 @@ private struct PreviewContainerView: View {
             if let tab = workspace.selectedTab {
                 if let payload = tab.payload {
                     RenderingPlaceholderView(title: tab.title)
-                    RendererWebView(workspace: workspace, payload: payload)
-                        .id(tab.id)
+                    RendererWebView(
+                        workspace: workspace,
+                        tabID: tab.id,
+                        payload: payload,
+                        cachedContent: tab.renderedContentCache
+                    )
                 } else {
                     VStack(spacing: 10) {
                         Image(systemName: "exclamationmark.triangle")

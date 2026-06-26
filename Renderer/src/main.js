@@ -84,6 +84,18 @@ window.MDViewer = {
     return cancelActiveRender(renderID);
   },
 
+  restoreRenderedContent(payload, html) {
+    cancelActiveRender();
+    currentPayload = payload;
+    applySettings(payload);
+    preview.innerHTML = html || '';
+    bindLinks(payload?.filePath || '');
+  },
+
+  snapshotRenderedContent() {
+    return preview.innerHTML;
+  },
+
   async render(payload, renderID) {
     cancelActiveRender();
     const token = createRenderToken(renderID);

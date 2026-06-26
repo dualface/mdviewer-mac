@@ -60,6 +60,7 @@ final class WorkspaceModel: ObservableObject {
     private var selectedDocumentMonitor: DocumentChangeMonitor?
     private var monitoredDocumentURL: URL?
     private var pendingDocumentRefresh: Task<Void, Never>?
+    private var pendingTabSelectionRefresh: Task<Void, Never>?
 
     var rootURLDidChange: ((URL?) -> Void)?
 
@@ -263,8 +264,7 @@ final class WorkspaceModel: ObservableObject {
         let kind = FileTypeDetector.kind(for: canonical, isDirectory: false)
         let previewKind = FileTypeDetector.previewKind(for: kind)
         if let existing = tabs.first(where: { canonicalURL($0.url) == canonical }) {
-            selectedTabID = existing.id
-            refresh(tabID: existing.id)
+            selectTab(existing.id)
             return
         }
 
@@ -337,7 +337,15 @@ final class WorkspaceModel: ObservableObject {
         guard tabs.indices.contains(index) else {
             return
         }
-        selectedTabID = tabs[index].id
+        selectTab(tabs[index].id)
+    }
+
+    func selectTab(_ id: OpenTab.ID) {
+        guard tabs.contains(where: { $0.id == id }) else {
+            return
+        }
+        selectedTabID = id
+        scheduleRefreshAfterSelection(tabID: id)
     }
 
     func closeAllTabs() {
@@ -382,10 +390,14 @@ final class WorkspaceModel: ObservableObject {
         do {
             let payload = try makePayload(for: tab.url, rootURL: rootURL, resolver: resolver)
             tab.previewKind = payload.kind
+            if tab.payload != payload {
+                tab.renderedContentCache = nil
+            }
             tab.payload = payload
             tab.errorMessage = nil
         } catch {
             tab.payload = nil
+            tab.renderedContentCache = nil
             tab.errorMessage = error.localizedDescription
         }
         tabs[index] = tab
@@ -393,6 +405,19 @@ final class WorkspaceModel: ObservableObject {
 
     func payloadForSelectedTab() -> RendererPayload? {
         selectedTab?.payload
+    }
+
+    func renderedContentCache(for tabID: OpenTab.ID) -> RenderedContentCache? {
+        tabs.first { $0.id == tabID }?.renderedContentCache
+    }
+
+    func updateRenderedContentCache(_ cache: RenderedContentCache, for tabID: OpenTab.ID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }),
+              tabs[index].payload == cache.payload
+        else {
+            return
+        }
+        tabs[index].renderedContentCache = cache
     }
 
     func clearWorkspace() {
@@ -489,6 +514,17 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
+    private func scheduleRefreshAfterSelection(tabID: OpenTab.ID) {
+        pendingTabSelectionRefresh?.cancel()
+        pendingTabSelectionRefresh = Task { @MainActor [weak self] in
+            await Task.yield()
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.refresh(tabID: tabID)
+        }
+    }
+
     private func updatePayloadSettings() {
         for idx in tabs.indices {
             guard var payload = tabs[idx].payload else {
@@ -498,6 +534,7 @@ final class WorkspaceModel: ObservableObject {
             payload.fontSize = settings.fontSize
             payload.fontFamily = settings.rendererFontFamily
             payload.previewWidth = settings.previewWidth
+            tabs[idx].renderedContentCache = nil
             tabs[idx].payload = payload
         }
         persistWorkspace()

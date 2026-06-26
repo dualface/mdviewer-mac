@@ -53,7 +53,13 @@ final class WorkspaceModelTests: XCTestCase {
 
         XCTAssertEqual(model.tabs.count, 1)
         XCTAssertEqual(model.selectedTabID, firstTabID)
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Changed")
+        let refresh = XCTNSPredicateExpectation(
+            predicate: NSPredicate { model, _ in
+                (model as? WorkspaceModel)?.selectedTab?.payload?.markdown == "# Changed"
+            },
+            object: model
+        )
+        wait(for: [refresh], timeout: 2)
     }
 
     func testSelectedDocumentRefreshesWhenFileChanges() throws {
@@ -262,6 +268,60 @@ final class WorkspaceModelTests: XCTestCase {
 
         model.selectTab(at: 1)
         XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "two.md")
+    }
+
+    func testSelectingTabRefreshesDocumentAndKeepsCacheWhenUnchanged() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let two = tempRoot.appendingPathComponent("two.md")
+
+        model.openWorkspace(tempRoot)
+        model.openFile(one)
+        let firstTabID = try XCTUnwrap(model.selectedTabID)
+        let firstPayload = try XCTUnwrap(model.selectedTab?.payload)
+        model.updateRenderedContentCache(
+            RenderedContentCache(html: "<p>cached</p>", payload: firstPayload),
+            for: firstTabID
+        )
+        model.openFile(two)
+
+        model.selectTab(firstTabID)
+
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "one.md")
+        XCTAssertEqual(model.selectedTab?.renderedContentCache?.html, "<p>cached</p>")
+    }
+
+    func testSelectingTabClearsCacheWhenDocumentChanged() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let two = tempRoot.appendingPathComponent("two.md")
+
+        model.openWorkspace(tempRoot)
+        model.openFile(one)
+        let firstTabID = try XCTUnwrap(model.selectedTabID)
+        let firstPayload = try XCTUnwrap(model.selectedTab?.payload)
+        model.updateRenderedContentCache(
+            RenderedContentCache(html: "<p>cached</p>", payload: firstPayload),
+            for: firstTabID
+        )
+        model.openFile(two)
+        try "# Updated".write(to: one, atomically: true, encoding: .utf8)
+
+        model.selectTab(firstTabID)
+
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+        XCTAssertEqual(model.selectedTab?.renderedContentCache?.html, "<p>cached</p>")
+
+        let refresh = XCTNSPredicateExpectation(
+            predicate: NSPredicate { model, _ in
+                guard let tab = (model as? WorkspaceModel)?.selectedTab else {
+                    return false
+                }
+                return tab.payload?.markdown == "# Updated" && tab.renderedContentCache == nil
+            },
+            object: model
+        )
+        wait(for: [refresh], timeout: 2)
     }
 
     func testSelectTabAtIndexIgnoresUnavailableIndex() throws {

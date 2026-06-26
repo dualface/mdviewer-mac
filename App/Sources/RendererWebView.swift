@@ -3,7 +3,9 @@ import WebKit
 
 struct RendererWebView: NSViewRepresentable {
     @ObservedObject var workspace: WorkspaceModel
+    let tabID: OpenTab.ID
     let payload: RendererPayload?
+    let cachedContent: RenderedContentCache?
 
     func makeCoordinator() -> Coordinator {
         Coordinator(workspace: workspace)
@@ -47,7 +49,7 @@ struct RendererWebView: NSViewRepresentable {
     func updateNSView(_ webView: WKWebView, context: Context) {
         context.coordinator.workspace = workspace
         context.coordinator.schemeHandler?.update(resolver: workspace.resolver)
-        context.coordinator.latestPayload = payload
+        context.coordinator.update(tabID: tabID, payload: payload, cachedContent: cachedContent)
         context.coordinator.renderIfReady()
     }
 
@@ -67,9 +69,12 @@ struct RendererWebView: NSViewRepresentable {
         weak var webView: WKWebView?
         var schemeHandler: WorkspaceAssetSchemeHandler?
         var workspace: WorkspaceModel
+        var latestTabID: OpenTab.ID?
         var latestPayload: RendererPayload?
+        var latestCachedContent: RenderedContentCache?
         var isReady = false
         private var lastRenderedJSON: String?
+        private var lastRestoredCachePayload: RendererPayload?
         private var renderID = 0
         private var currentRenderFailed = false
         private var hasDisplayedRender = false
@@ -77,6 +82,19 @@ struct RendererWebView: NSViewRepresentable {
 
         init(workspace: WorkspaceModel) {
             self.workspace = workspace
+        }
+
+        func update(tabID: OpenTab.ID, payload: RendererPayload?, cachedContent: RenderedContentCache?) {
+            if latestTabID != tabID {
+                cancelCurrentRender()
+                renderID += 1
+                currentRenderFailed = false
+                lastRenderedJSON = nil
+                lastRestoredCachePayload = nil
+            }
+            latestTabID = tabID
+            latestPayload = payload
+            latestCachedContent = cachedContent
         }
 
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
@@ -160,6 +178,10 @@ struct RendererWebView: NSViewRepresentable {
             guard force || json != lastRenderedJSON else {
                 return
             }
+            if restoreCacheIfAvailable(for: latestPayload) {
+                lastRenderedJSON = json
+                return
+            }
             let previousRenderedJSON = lastRenderedJSON
             lastRenderedJSON = json
             cancelCurrentRender()
@@ -221,7 +243,9 @@ struct RendererWebView: NSViewRepresentable {
             isActive = false
             renderID += 1
             latestPayload = nil
+            latestCachedContent = nil
             lastRenderedJSON = nil
+            lastRestoredCachePayload = nil
         }
 
         func cancelCurrentRender() {
@@ -283,6 +307,7 @@ struct RendererWebView: NSViewRepresentable {
             hasDisplayedRender = true
             webView?.alphaValue = 1
             if !currentRenderFailed {
+                cacheRenderedContentIfCurrent(completedRenderID)
                 Task { @MainActor in
                     guard self.isActive, self.renderID == completedRenderID else {
                         return
@@ -326,6 +351,54 @@ struct RendererWebView: NSViewRepresentable {
             }
             isReady = true
             renderIfReady(force: true)
+        }
+
+        private func restoreCacheIfAvailable(for payload: RendererPayload) -> Bool {
+            guard lastRestoredCachePayload != payload,
+                  let webView,
+                  let cache = latestCachedContent,
+                  cache.payload == payload,
+                  let data = try? JSONEncoder().encode(cache)
+            else {
+                return false
+            }
+            lastRestoredCachePayload = payload
+            let encoded = data.base64EncodedString()
+            let script = """
+            (() => {
+              const cache = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob('\(encoded)'), c => c.charCodeAt(0))));
+              window.MDViewer?.restoreRenderedContent?.(cache.payload, cache.html);
+            })();
+            """
+            webView.evaluateJavaScript(script)
+            webView.alphaValue = 1
+            hasDisplayedRender = true
+            return true
+        }
+
+        private func cacheRenderedContentIfCurrent(_ completedRenderID: Int) {
+            guard let webView,
+                  let latestTabID,
+                  let payload = latestPayload
+            else {
+                return
+            }
+            webView.evaluateJavaScript("window.MDViewer?.snapshotRenderedContent?.()") { [weak self] result, _ in
+                guard let self,
+                      self.isActive,
+                      self.renderID == completedRenderID,
+                      let html = result as? String
+                else {
+                    return
+                }
+                let cache = RenderedContentCache(html: html, payload: payload)
+                Task { @MainActor in
+                    guard self.isActive, self.renderID == completedRenderID else {
+                        return
+                    }
+                    self.workspace.updateRenderedContentCache(cache, for: latestTabID)
+                }
+            }
         }
 
         private func checkRendererReady(attempt: Int = 0) {
