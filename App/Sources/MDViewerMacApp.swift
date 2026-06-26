@@ -25,6 +25,15 @@ struct MDViewerMacApp: App {
                     workspace.openDirectoryPanel()
                 }
                 .keyboardShortcut("o", modifiers: [.command, .shift])
+
+                Button(workspace.selectedTab == nil ? "Close Window" : "Close File") {
+                    if workspace.selectedTab == nil {
+                        NSApp.keyWindow?.performClose(nil)
+                    } else {
+                        workspace.closeSelectedTab()
+                    }
+                }
+                .keyboardShortcut("w", modifiers: [.command])
             }
 
             CommandMenu("Preview") {

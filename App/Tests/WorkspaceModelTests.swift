@@ -207,4 +207,32 @@ final class WorkspaceModelTests: XCTestCase {
 
         XCTAssertTrue(model.isDirectoryExpanded(childDirectory))
     }
+
+    func testClosingSelectedDocumentSelectsNextAvailableDocument() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let two = tempRoot.appendingPathComponent("two.md")
+
+        model.openWorkspace(tempRoot)
+        model.openFile(one)
+        model.openFile(two)
+        model.selectedTabID = model.tabs.first?.id
+
+        model.closeSelectedTab()
+
+        XCTAssertEqual(model.tabs.map(\.url.lastPathComponent), ["two.md"])
+        XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "two.md")
+    }
+
+    func testClosingOnlySelectedDocumentClearsSelection() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+
+        model.openDocumentURL(one)
+
+        model.closeSelectedTab()
+
+        XCTAssertTrue(model.tabs.isEmpty)
+        XCTAssertNil(model.selectedTabID)
+    }
 }

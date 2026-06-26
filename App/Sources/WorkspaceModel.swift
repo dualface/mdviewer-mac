@@ -322,6 +322,13 @@ final class WorkspaceModel: ObservableObject {
         }
     }
 
+    func closeSelectedTab() {
+        guard let selectedTabID else {
+            return
+        }
+        closeTab(selectedTabID)
+    }
+
     func closeAllTabs() {
         guard !tabs.isEmpty else {
             return
