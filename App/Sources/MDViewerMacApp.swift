@@ -69,16 +69,45 @@ struct MDViewerMacApp: App {
                         .disabled(workspace.settings.theme == theme)
                     }
                 }
+
+                Divider()
+
+                Menu("Preview Width") {
+                    ForEach(previewWidthShortcuts, id: \.width) { shortcut in
+                        Button(shortcut.width.label) {
+                            workspace.setPreviewWidth(shortcut.width)
+                        }
+                        .keyboardShortcut(KeyEquivalent(shortcut.key), modifiers: [.option])
+                        .disabled(workspace.settings.previewWidth == shortcut.width)
+                    }
+                }
+
+                Divider()
+
+                Menu("Preview Font") {
+                    Menu("Size") {
+                        ForEach(PreviewFont.sizes, id: \.self) { size in
+                            Button("\(Int(size))px") {
+                                workspace.setPreviewFontSize(size)
+                            }
+                            .disabled(workspace.settings.fontSize == size)
+                        }
+                    }
+
+                    Divider()
+
+                    Menu("Family") {
+                        ForEach(PreviewFont.options) { option in
+                            Button(option.label) {
+                                workspace.setPreviewFontFamily(option.id)
+                            }
+                            .disabled(workspace.settings.fontFamily == option.id)
+                        }
+                    }
+                }
             }
 
             CommandGroup(after: .windowArrangement) {
-                ForEach(previewWidthShortcuts, id: \.width) { shortcut in
-                    Button("Preview Width: \(shortcut.width.label)") {
-                        workspace.setPreviewWidth(shortcut.width)
-                    }
-                    .keyboardShortcut(KeyEquivalent(shortcut.key), modifiers: [.option])
-                }
-
                 ForEach(0..<10, id: \.self) { index in
                     Button("Select File \(index + 1)") {
                         workspace.selectTab(at: index)

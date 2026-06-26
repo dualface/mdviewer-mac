@@ -246,6 +246,19 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.settings.theme, .light)
     }
 
+    func testSetPreviewFontSettingsChangeFont() throws {
+        let model = WorkspaceModel()
+
+        XCTAssertEqual(model.settings.fontSize, 16)
+        XCTAssertEqual(model.settings.fontFamily, FontFamily.systemID)
+
+        model.setPreviewFontSize(20)
+        XCTAssertEqual(model.settings.fontSize, 20)
+
+        model.setPreviewFontFamily(FontFamily.monospaceID)
+        XCTAssertEqual(model.settings.fontFamily, FontFamily.monospaceID)
+    }
+
     func testOpeningDirectoryURLShowsSidebar() throws {
         let model = WorkspaceModel()
 

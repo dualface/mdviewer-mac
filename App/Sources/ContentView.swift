@@ -275,73 +275,10 @@ private struct ToolbarView: View {
 
             WorkspacePathView()
                 .frame(minWidth: 180, maxWidth: .infinity, alignment: .leading)
-
-            Spacer()
-
-            Picker("Width", selection: settingsBinding(\.previewWidth)) {
-                ForEach(PreviewWidth.allCases, id: \.self) { width in
-                    Text(width.label).tag(width)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 118)
-            .help("Preview Width")
-            .accessibilityLabel("Preview Width")
-
-            Picker("Font Size", selection: settingsBinding(\.fontSize)) {
-                ForEach(fontSizes, id: \.self) { size in
-                    Text("\(Int(size))px").tag(size)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 82)
-            .help("Font Size")
-            .accessibilityLabel("Font Size")
-
-            Picker("Font", selection: settingsBinding(\.fontFamily)) {
-                ForEach(fontOptions, id: \.id) { option in
-                    Text(option.name).tag(option.id)
-                }
-            }
-            .labelsHidden()
-            .controlSize(.small)
-            .frame(width: 140)
-            .help("Font")
-            .accessibilityLabel("Font")
-
         }
         .padding(.horizontal, 8)
         .frame(height: 46)
         .glassPanel(material: .bar)
-    }
-
-    private var fontSizes: [Double] {
-        [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28]
-    }
-
-    private var fontOptions: [FontOption] {
-        [
-            FontOption(id: FontFamily.systemID, name: "System"),
-            FontOption(id: FontFamily.serifID, name: "Serif"),
-            FontOption(id: FontFamily.monospaceID, name: "Mono"),
-            FontOption(id: "Avenir Next", name: "Avenir Next"),
-            FontOption(id: "Georgia", name: "Georgia"),
-            FontOption(id: "Helvetica Neue", name: "Helvetica"),
-            FontOption(id: "Menlo", name: "Menlo")
-        ]
-    }
-
-    private func settingsBinding<Value>(_ keyPath: WritableKeyPath<PersistedSettings, Value>) -> Binding<Value> {
-        Binding {
-            workspace.settings[keyPath: keyPath]
-        } set: { value in
-            var settings = workspace.settings
-            settings[keyPath: keyPath] = value
-            workspace.settings = settings
-        }
     }
 }
 
@@ -412,11 +349,6 @@ private struct WorkspacePathView: View {
     private var subtitle: String {
         workspace.rootURL?.path ?? "Open a folder or Markdown file"
     }
-}
-
-private struct FontOption: Hashable {
-    let id: String
-    let name: String
 }
 
 private struct SidebarView: View {

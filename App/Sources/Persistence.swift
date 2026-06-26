@@ -60,6 +60,25 @@ enum FontFamily {
     }
 }
 
+struct PreviewFontOption: Hashable, Identifiable, Sendable {
+    let id: String
+    let label: String
+}
+
+enum PreviewFont {
+    static let sizes: [Double] = [12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28]
+
+    static let options: [PreviewFontOption] = [
+        PreviewFontOption(id: FontFamily.systemID, label: "System"),
+        PreviewFontOption(id: FontFamily.serifID, label: "Serif"),
+        PreviewFontOption(id: FontFamily.monospaceID, label: "Mono"),
+        PreviewFontOption(id: "Avenir Next", label: "Avenir Next"),
+        PreviewFontOption(id: "Georgia", label: "Georgia"),
+        PreviewFontOption(id: "Helvetica Neue", label: "Helvetica"),
+        PreviewFontOption(id: "Menlo", label: "Menlo")
+    ]
+}
+
 enum AppTheme: String, CaseIterable, Codable, Sendable {
     case system
     case light

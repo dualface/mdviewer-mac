@@ -196,6 +196,24 @@ final class WorkspaceModel: ObservableObject {
         settings = updated
     }
 
+    func setPreviewFontSize(_ fontSize: Double) {
+        guard settings.fontSize != fontSize else {
+            return
+        }
+        var updated = settings
+        updated.fontSize = fontSize
+        settings = updated
+    }
+
+    func setPreviewFontFamily(_ fontFamily: String) {
+        guard settings.fontFamily != fontFamily else {
+            return
+        }
+        var updated = settings
+        updated.fontFamily = fontFamily
+        settings = updated
+    }
+
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
         stopSelectedDocumentMonitor()
         stopAccessingCurrentWorkspace()
