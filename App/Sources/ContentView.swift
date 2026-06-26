@@ -369,6 +369,7 @@ private struct ToolbarIconButton: View {
                 .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
+        .focusable(false)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.42 : 1)
         .background(
