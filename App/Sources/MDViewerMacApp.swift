@@ -37,6 +37,11 @@ struct MDViewerMacApp: App {
             }
 
             CommandMenu("Preview") {
+                Button(workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar") {
+                    workspace.toggleSidebar()
+                }
+                .keyboardShortcut("b", modifiers: [.command])
+
                 Button("Refresh") {
                     workspace.refreshSelectedTab()
                 }

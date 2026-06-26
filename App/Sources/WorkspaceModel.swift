@@ -161,6 +161,10 @@ final class WorkspaceModel: ObservableObject {
         settings = updated
     }
 
+    func toggleSidebar() {
+        setSidebarVisible(!settings.isSidebarVisible)
+    }
+
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
         stopSelectedDocumentMonitor()
         stopAccessingCurrentWorkspace()

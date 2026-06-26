@@ -252,7 +252,7 @@ private struct ToolbarView: View {
                 title: workspace.settings.isSidebarVisible ? "Hide Sidebar" : "Show Sidebar",
                 systemImage: "sidebar.left"
             ) {
-                workspace.setSidebarVisible(!workspace.settings.isSidebarVisible)
+                workspace.toggleSidebar()
             }
 
             ToolbarIconButton(title: "Open Folder", systemImage: "folder") {

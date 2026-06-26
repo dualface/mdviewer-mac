@@ -192,6 +192,18 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertTrue(model.isDirectoryExpanded(manualDirectory))
     }
 
+    func testToggleSidebarChangesVisibility() throws {
+        let model = WorkspaceModel()
+
+        XCTAssertTrue(model.settings.isSidebarVisible)
+
+        model.toggleSidebar()
+        XCTAssertFalse(model.settings.isSidebarVisible)
+
+        model.toggleSidebar()
+        XCTAssertTrue(model.settings.isSidebarVisible)
+    }
+
     func testShowingSidebarExpandsSelectedDocumentDirectory() throws {
         let model = WorkspaceModel()
         let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)
