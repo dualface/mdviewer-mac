@@ -2,6 +2,8 @@
 
 MarkdownViewer is a native macOS Markdown viewer built with SwiftUI and WKWebView. It loads an offline renderer bundle inside the app, making it useful for browsing local Markdown documents, code snippets, images, and documentation workspaces.
 
+![MarkdownViewer app screenshot](docs/markdownviewer-screenshot.png)
+
 ## Features
 
 - Open a single Markdown file or an entire folder workspace.
