@@ -27,7 +27,12 @@ final class WorkspaceModel: ObservableObject {
     @Published private(set) var rootURL: URL?
     @Published var rootChildren: [FileItem] = []
     @Published var tabs: [OpenTab] = []
-    @Published var selectedTabID: OpenTab.ID?
+    @Published var selectedTabID: OpenTab.ID? {
+        didSet {
+            updateSelectedDocumentMonitor()
+            persistWorkspace()
+        }
+    }
     @Published var settings: PersistedSettings {
         didSet {
             AppStorage.saveSettings(settings)
@@ -38,6 +43,9 @@ final class WorkspaceModel: ObservableObject {
 
     private var securityScopedURLs: [URL] = []
     private var initialWorkspaceFile: URL?
+    private var selectedDocumentMonitor: DocumentChangeMonitor?
+    private var monitoredDocumentURL: URL?
+    private var pendingDocumentRefresh: Task<Void, Never>?
 
     init() {
         self.settings = AppStorage.loadSettings()
@@ -128,6 +136,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
+        stopSelectedDocumentMonitor()
         stopAccessingCurrentWorkspace()
 
         let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
@@ -192,7 +201,6 @@ final class WorkspaceModel: ObservableObject {
         if let existing = tabs.first(where: { canonicalURL($0.url) == canonical }) {
             selectedTabID = existing.id
             refresh(tabID: existing.id)
-            persistWorkspace()
             return
         }
 
@@ -200,7 +208,6 @@ final class WorkspaceModel: ObservableObject {
         tabs.append(tab)
         selectedTabID = tab.id
         refresh(tabID: tab.id)
-        persistWorkspace()
     }
 
     func openLink(_ rawLink: String, from filePath: String) {
@@ -248,7 +255,11 @@ final class WorkspaceModel: ObservableObject {
         } else if wasSelected {
             selectedTabID = tabs[min(idx, tabs.count - 1)].id
         }
-        persistWorkspace()
+        if wasSelected {
+            updateSelectedDocumentMonitor()
+        } else {
+            persistWorkspace()
+        }
     }
 
     func closeAllTabs() {
@@ -257,7 +268,6 @@ final class WorkspaceModel: ObservableObject {
         }
         tabs = []
         selectedTabID = nil
-        persistWorkspace()
     }
 
     func closeOtherTabs() {
@@ -266,7 +276,6 @@ final class WorkspaceModel: ObservableObject {
         }
         tabs = [selectedTab]
         selectedTabID = selectedTab.id
-        persistWorkspace()
     }
 
     func refreshSelectedTab() {
@@ -302,6 +311,7 @@ final class WorkspaceModel: ObservableObject {
     }
 
     func clearWorkspace() {
+        stopSelectedDocumentMonitor()
         stopAccessingCurrentWorkspace()
         rootURL = nil
         initialWorkspaceFile = nil
@@ -475,6 +485,8 @@ final class WorkspaceModel: ObservableObject {
                let selectedURL = try? resolver.resolveWorkspacePath(selectedFilePath),
                let tab = tabs.first(where: { $0.url == selectedURL }) {
                 selectedTabID = tab.id
+            } else {
+                updateSelectedDocumentMonitor()
             }
         } catch {
             AppStorage.saveWorkspace(nil)
@@ -500,5 +512,62 @@ final class WorkspaceModel: ObservableObject {
 
     private func canonicalURL(_ url: URL) -> URL {
         url.standardizedFileURL.resolvingSymlinksInPath()
+    }
+
+    private func updateSelectedDocumentMonitor() {
+        pendingDocumentRefresh?.cancel()
+        guard let selectedTab else {
+            stopSelectedDocumentMonitor()
+            return
+        }
+
+        let documentURL = canonicalURL(selectedTab.url)
+        guard monitoredDocumentURL != documentURL else {
+            return
+        }
+
+        startSelectedDocumentMonitor(for: documentURL)
+    }
+
+    private func scheduleRefreshForChangedDocument(_ documentURL: URL) {
+        pendingDocumentRefresh?.cancel()
+        pendingDocumentRefresh = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled else {
+                return
+            }
+            await MainActor.run {
+                self?.refreshChangedDocument(documentURL)
+            }
+        }
+    }
+
+    private func refreshChangedDocument(_ documentURL: URL) {
+        guard let selectedTabID,
+              let selectedTab,
+              canonicalURL(selectedTab.url) == documentURL
+        else {
+            return
+        }
+        refresh(tabID: selectedTabID)
+        startSelectedDocumentMonitor(for: documentURL)
+    }
+
+    private func stopSelectedDocumentMonitor() {
+        pendingDocumentRefresh?.cancel()
+        pendingDocumentRefresh = nil
+        selectedDocumentMonitor?.cancel()
+        selectedDocumentMonitor = nil
+        monitoredDocumentURL = nil
+    }
+
+    private func startSelectedDocumentMonitor(for documentURL: URL) {
+        selectedDocumentMonitor?.cancel()
+        monitoredDocumentURL = documentURL
+        selectedDocumentMonitor = DocumentChangeMonitor(url: documentURL) { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.scheduleRefreshForChangedDocument(documentURL)
+            }
+        }
     }
 }

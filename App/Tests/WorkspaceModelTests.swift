@@ -56,6 +56,54 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Changed")
     }
 
+    func testSelectedDocumentRefreshesWhenFileChanges() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+
+        model.openDocumentURL(one)
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+
+        try "# Auto refreshed".write(to: one, atomically: true, encoding: .utf8)
+
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { model, _ in
+                (model as? WorkspaceModel)?.selectedTab?.payload?.markdown == "# Auto refreshed"
+            },
+            object: model
+        )
+        wait(for: [expectation], timeout: 2)
+    }
+
+    func testSelectedDocumentKeepsRefreshingAfterAtomicReplacement() throws {
+        let model = WorkspaceModel()
+        let one = tempRoot.appendingPathComponent("one.md")
+        let replacement = tempRoot.appendingPathComponent("replacement.md")
+
+        model.openDocumentURL(one)
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+
+        try "# Replaced".write(to: replacement, atomically: true, encoding: .utf8)
+        _ = try FileManager.default.replaceItemAt(one, withItemAt: replacement)
+
+        let firstRefresh = XCTNSPredicateExpectation(
+            predicate: NSPredicate { model, _ in
+                (model as? WorkspaceModel)?.selectedTab?.payload?.markdown == "# Replaced"
+            },
+            object: model
+        )
+        wait(for: [firstRefresh], timeout: 2)
+
+        try "# Replaced Again".write(to: one, atomically: true, encoding: .utf8)
+
+        let secondRefresh = XCTNSPredicateExpectation(
+            predicate: NSPredicate { model, _ in
+                (model as? WorkspaceModel)?.selectedTab?.payload?.markdown == "# Replaced Again"
+            },
+            object: model
+        )
+        wait(for: [secondRefresh], timeout: 2)
+    }
+
     func testOpeningMarkdownFromExternalEventSwitchesToContainingDirectoryWithoutShowingSidebar() throws {
         let model = WorkspaceModel()
         let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)
