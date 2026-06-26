@@ -95,6 +95,29 @@ final class WorkspaceModel: ObservableObject {
         openWorkspace(parent, initialFile: canonical)
     }
 
+    func openExternalDocumentURL(_ url: URL) {
+        let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
+        var isDirectory: ObjCBool = false
+        FileManager.default.fileExists(atPath: canonical.path, isDirectory: &isDirectory)
+        if isDirectory.boolValue {
+            openDocumentURL(canonical)
+            return
+        }
+
+        guard FileTypeDetector.isMarkdown(canonical) else {
+            openDocumentURL(canonical)
+            return
+        }
+
+        let parent = canonical.deletingLastPathComponent()
+        setSidebarVisible(false)
+        if rootURL.map(canonicalURL) == parent {
+            openFile(canonical)
+        } else {
+            openWorkspace(parent, initialFile: canonical)
+        }
+    }
+
     func setSidebarVisible(_ isVisible: Bool) {
         guard settings.isSidebarVisible != isVisible else {
             return

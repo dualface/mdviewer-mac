@@ -55,4 +55,21 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(model.selectedTabID, firstTabID)
         XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Changed")
     }
+
+    func testOpeningMarkdownFromExternalEventSwitchesToContainingDirectoryWithoutShowingSidebar() throws {
+        let model = WorkspaceModel()
+        let childDirectory = tempRoot.appendingPathComponent("child", isDirectory: true)
+        let nested = childDirectory.appendingPathComponent("nested.md")
+        try FileManager.default.createDirectory(at: childDirectory, withIntermediateDirectories: true)
+        try "# Nested".write(to: nested, atomically: true, encoding: .utf8)
+
+        model.openWorkspace(tempRoot)
+        model.setSidebarVisible(true)
+        model.openExternalDocumentURL(nested)
+
+        XCTAssertEqual(model.rootURL, childDirectory.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTab?.url, nested.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Nested")
+        XCTAssertFalse(model.settings.isSidebarVisible)
+    }
 }

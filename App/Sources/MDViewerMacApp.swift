@@ -14,7 +14,7 @@ struct MDViewerMacApp: App {
                     appDelegate.attach(workspace)
                 }
                 .onOpenURL { url in
-                    workspace.openDocumentURL(url)
+                    workspace.openExternalDocumentURL(url)
                 }
         }
         .commands {
@@ -84,7 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pendingDocumentURLs.append(contentsOf: urls)
             return
         }
-        urls.forEach { workspace.openDocumentURL($0) }
+        urls.forEach { workspace.openExternalDocumentURL($0) }
         activateDocumentWindow()
     }
 
