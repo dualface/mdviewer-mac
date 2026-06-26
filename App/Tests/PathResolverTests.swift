@@ -56,4 +56,20 @@ final class PathResolverTests: XCTestCase {
 
         XCTAssertThrowsError(try resolver.resolveLink("../../escape.png", from: doc))
     }
+
+    func testWorkspacePathAllowsDotsInsideFileName() throws {
+        let resolver = PathResolver(rootURL: tempRoot)
+        let file = tempRoot.appendingPathComponent("docs/notes..md")
+        try "dots".write(to: file, atomically: true, encoding: .utf8)
+
+        let resolved = try resolver.resolveWorkspacePath("/docs/notes..md")
+
+        XCTAssertEqual(resolved, file.standardizedFileURL.resolvingSymlinksInPath())
+    }
+
+    func testWorkspacePathRejectsTraversalComponents() throws {
+        let resolver = PathResolver(rootURL: tempRoot)
+
+        XCTAssertThrowsError(try resolver.resolveWorkspacePath("/docs/../escape.md"))
+    }
 }

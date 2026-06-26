@@ -2,6 +2,7 @@ import DOMPurify from 'dompurify';
 import mermaid from 'mermaid';
 import hljs from 'highlight.js/lib/common';
 import MarkdownWorker from './markdownWorker.js?worker&inline';
+import { resolveAssetURL } from './assetResolver.js';
 import 'highlight.js/styles/github.css';
 import 'katex/dist/katex.min.css';
 import './styles.css';
@@ -11,6 +12,7 @@ let currentPayload = null;
 let renderedPayloadKey = null;
 let activeRenderToken = null;
 let activeMarkdownWorker = null;
+let isPaused = false;
 
 class RenderCancelledError extends Error {
   constructor(renderID) {
@@ -82,11 +84,21 @@ window.MDViewer = {
     return Boolean(activeRenderToken);
   },
 
+  setPaused(paused) {
+    isPaused = Boolean(paused);
+    if (isPaused) {
+      cancelActiveRender();
+    }
+  },
+
   cancelRender(renderID) {
     return cancelActiveRender(renderID);
   },
 
   async render(payload, renderID) {
+    if (isPaused) {
+      return;
+    }
     const payloadKey = JSON.stringify(payload);
     if (!activeRenderToken && renderedPayloadKey === payloadKey) {
       this.lastStartedRenderID = renderID;
@@ -164,6 +176,7 @@ async function renderMarkdown(payload, token) {
     });
     assertRenderActive(token);
     preview.innerHTML = sanitized;
+    sanitizeDocumentURLs(payload.filePath);
     bindLinks(payload.filePath);
     await renderMermaidBlocks(token);
   } catch (error) {
@@ -312,39 +325,31 @@ function bindLinks(filePath) {
   });
 }
 
-function resolveAssetURL(src, filePath) {
-  if (!src) {
-    return src;
-  }
-  if (/^(https?:|data:|blob:)/i.test(src)) {
-    return src;
-  }
-  const path = resolvePath(src, filePath);
-  const url = new URL('mdv-file://asset');
-  url.searchParams.set('path', path);
-  return url.toString();
-}
-
-function resolvePath(src, filePath) {
-  const cleanSrc = decodeURIComponent(src.split('#')[0].split('?')[0]);
-  if (cleanSrc.startsWith('/')) {
-    return normalizePath(cleanSrc);
-  }
-  const base = filePath.split('/').slice(0, -1).join('/') || '/';
-  return normalizePath(`${base}/${cleanSrc}`);
-}
-
-function normalizePath(path) {
-  const parts = [];
-  for (const part of path.split('/')) {
-    if (!part || part === '.') continue;
-    if (part === '..') {
-      parts.pop();
-      continue;
+function sanitizeDocumentURLs(filePath) {
+  preview.querySelectorAll('[src]').forEach((element) => {
+    const src = element.getAttribute('src');
+    try {
+      const resolved = resolveAssetURL(src, filePath);
+      if (resolved) {
+        element.setAttribute('src', resolved);
+      } else {
+        element.removeAttribute('src');
+      }
+    } catch {
+      element.removeAttribute('src');
     }
-    parts.push(part);
-  }
-  return `/${parts.join('/')}`;
+  });
+
+  preview.querySelectorAll('[srcset]').forEach((element) => {
+    element.removeAttribute('srcset');
+  });
+
+  preview.querySelectorAll('[href]').forEach((element) => {
+    const href = element.getAttribute('href') || '';
+    if (/^(https?:|data:|blob:)/i.test(href)) {
+      element.removeAttribute('href');
+    }
+  });
 }
 
 function postMessage(name, body) {

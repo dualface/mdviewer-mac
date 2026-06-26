@@ -1,10 +1,11 @@
 import Foundation
 import UniformTypeIdentifiers
-import WebKit
+@preconcurrency import WebKit
 
 final class WorkspaceAssetSchemeHandler: NSObject, WKURLSchemeHandler, @unchecked Sendable {
     private let lock = NSLock()
     private var resolver: PathResolver?
+    private let queue = DispatchQueue(label: "com.dualface.mdviewer.workspace-asset-scheme", qos: .userInitiated)
 
     @MainActor
     init(workspace: WorkspaceModel) {
@@ -26,22 +27,15 @@ final class WorkspaceAssetSchemeHandler: NSObject, WKURLSchemeHandler, @unchecke
             urlSchemeTask.didFailWithError(WorkspaceError.noWorkspace)
             return
         }
+        let taskBox = SendableURLSchemeTask(urlSchemeTask)
 
-        do {
-            let fileURL = try resolver.resolveWorkspacePath(path)
-            let data = try Data(contentsOf: fileURL)
-            let mimeType = mimeType(for: fileURL)
-            let response = URLResponse(
-                url: requestURL,
-                mimeType: mimeType,
-                expectedContentLength: data.count,
-                textEncodingName: nil
-            )
-            urlSchemeTask.didReceive(response)
-            urlSchemeTask.didReceive(data)
-            urlSchemeTask.didFinish()
-        } catch {
-            urlSchemeTask.didFailWithError(error)
+        queue.async {
+            do {
+                let fileURL = try resolver.resolveWorkspacePath(path)
+                try WorkspaceAssetStreamer.streamFile(at: fileURL, requestURL: requestURL, to: taskBox.task)
+            } catch {
+                taskBox.task.didFailWithError(error)
+            }
         }
     }
 
@@ -53,8 +47,44 @@ final class WorkspaceAssetSchemeHandler: NSObject, WKURLSchemeHandler, @unchecke
             resolver
         }
     }
+}
 
-    private func mimeType(for url: URL) -> String {
+private final class SendableURLSchemeTask: @unchecked Sendable {
+    let task: WKURLSchemeTask
+
+    init(_ task: WKURLSchemeTask) {
+        self.task = task
+    }
+}
+
+private enum WorkspaceAssetStreamer {
+    static func streamFile(at fileURL: URL, requestURL: URL, to urlSchemeTask: WKURLSchemeTask) throws {
+        let values = try fileURL.resourceValues(forKeys: [.fileSizeKey])
+        let fileSize = values.fileSize ?? 0
+        let response = URLResponse(
+            url: requestURL,
+            mimeType: mimeType(for: fileURL),
+            expectedContentLength: fileSize,
+            textEncodingName: nil
+        )
+        urlSchemeTask.didReceive(response)
+
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer {
+            try? handle.close()
+        }
+
+        while true {
+            let data = try handle.read(upToCount: chunkSize) ?? Data()
+            if data.isEmpty {
+                break
+            }
+            urlSchemeTask.didReceive(data)
+        }
+        urlSchemeTask.didFinish()
+    }
+
+    private static func mimeType(for url: URL) -> String {
         if let type = try? url.resourceValues(forKeys: [.contentTypeKey]).contentType,
            let mime = type.preferredMIMEType {
             return mime
@@ -74,4 +104,6 @@ final class WorkspaceAssetSchemeHandler: NSObject, WKURLSchemeHandler, @unchecke
             return "application/octet-stream"
         }
     }
+
+    private static let chunkSize = 256 * 1024
 }

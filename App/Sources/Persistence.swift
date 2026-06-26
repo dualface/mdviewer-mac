@@ -120,7 +120,7 @@ enum PreviewWidth: String, CaseIterable, Codable, Sendable {
 enum AppStorage {
     private static let workspaceKey = "persistedWorkspace"
     private static let settingsKey = "persistedSettings"
-    static var defaults: UserDefaults = .standard
+    nonisolated(unsafe) static var defaults: UserDefaults = .standard
 
     static func loadWorkspace() -> PersistedWorkspace? {
         guard let data = defaults.data(forKey: workspaceKey) else {

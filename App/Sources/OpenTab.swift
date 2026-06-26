@@ -7,16 +7,22 @@ struct OpenTab: Identifiable, Sendable {
     var previewKind: PreviewKind
     var payload: RendererPayload?
     var errorMessage: String?
+    var statusMessage: String?
+    var isLoading: Bool
+    var payloadRequestID: UUID
 
     init(url: URL, previewKind: PreviewKind) {
         self.id = UUID()
         self.url = url.standardizedFileURL
         self.title = url.lastPathComponent
         self.previewKind = previewKind
+        self.isLoading = false
+        self.payloadRequestID = UUID()
     }
 }
 
 struct RendererPayload: Codable, Equatable, Sendable {
+    var schemaVersion: Int
     var kind: PreviewKind
     var filePath: String
     var rootPath: String

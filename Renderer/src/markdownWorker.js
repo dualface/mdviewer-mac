@@ -6,6 +6,7 @@ import taskLists from 'markdown-it-task-lists';
 import katexPlugin from '@vscode/markdown-it-katex';
 import hljs from 'highlight.js/lib/common';
 import katex from 'katex';
+import { resolveAssetURL } from './assetResolver.js';
 
 const markdownItKatex = katexPlugin.default ?? katexPlugin;
 
@@ -87,41 +88,6 @@ self.addEventListener('message', (event) => {
     });
   }
 });
-
-function resolveAssetURL(src, filePath) {
-  if (!src) {
-    return src;
-  }
-  if (/^(https?:|data:|blob:)/i.test(src)) {
-    return src;
-  }
-  const path = resolvePath(src, filePath);
-  const url = new URL('mdv-file://asset');
-  url.searchParams.set('path', path);
-  return url.toString();
-}
-
-function resolvePath(src, filePath) {
-  const cleanSrc = decodeURIComponent(src.split('#')[0].split('?')[0]);
-  if (cleanSrc.startsWith('/')) {
-    return normalizePath(cleanSrc);
-  }
-  const base = filePath.split('/').slice(0, -1).join('/') || '/';
-  return normalizePath(`${base}/${cleanSrc}`);
-}
-
-function normalizePath(path) {
-  const parts = [];
-  for (const part of path.split('/')) {
-    if (!part || part === '.') continue;
-    if (part === '..') {
-      parts.pop();
-      continue;
-    }
-    parts.push(part);
-  }
-  return `/${parts.join('/')}`;
-}
 
 function escapeHtml(text) {
   return String(text ?? '')

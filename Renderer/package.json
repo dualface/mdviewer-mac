@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test": "node --test src/*.test.js",
     "build": "vite build --emptyOutDir && node scripts/fix-html.mjs"
   },
   "dependencies": {

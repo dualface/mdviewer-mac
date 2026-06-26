@@ -7,6 +7,7 @@ enum WorkspaceError: LocalizedError {
     case outsideWorkspace
     case unreadableFile
     case unsupportedFile
+    case fileTooLarge(Int64)
 
     var errorDescription: String? {
         switch self {
@@ -18,6 +19,8 @@ enum WorkspaceError: LocalizedError {
             return "The file could not be read."
         case .unsupportedFile:
             return "Unsupported file type."
+        case .fileTooLarge(let maximumSize):
+            return "The file is too large to preview. Maximum supported size is \(ByteCountFormatter.string(fromByteCount: maximumSize, countStyle: .file))."
         }
     }
 }
@@ -36,7 +39,7 @@ final class WorkspaceModel: ObservableObject {
     }
     @Published var rootChildren: [FileItem] = []
     @Published var tabs: [OpenTab] = []
-    @Published private(set) var expandedDirectoryURLs: Set<URL> = []
+    @Published var expandedDirectoryURLs: Set<URL> = []
     @Published var selectedTabID: OpenTab.ID? {
         didSet {
             expandSelectedDocumentDirectory()
@@ -55,13 +58,16 @@ final class WorkspaceModel: ObservableObject {
     }
     @Published var statusMessage: String?
 
-    private var securityScopedURLs: [URL] = []
-    private var initialWorkspaceFile: URL?
-    private var selectedDocumentMonitor: DocumentChangeMonitor?
-    private var monitoredDocumentURL: URL?
-    private var pendingDocumentRefresh: Task<Void, Never>?
-    private var pendingTabSelectionRefresh: Task<Void, Never>?
-    private var lastSelectedTabCloseUptime: TimeInterval = 0
+    var securityScopedURLs: [URL] = []
+    var initialWorkspaceFile: URL?
+    var selectedDocumentMonitor: DocumentChangeMonitor?
+    var monitoredDocumentURL: URL?
+    var pendingDocumentRefresh: Task<Void, Never>?
+    var pendingTabSelectionRefresh: Task<Void, Never>?
+    var payloadTasks: [OpenTab.ID: Task<Void, Never>] = [:]
+    var lastSelectedTabCloseUptime: TimeInterval = 0
+
+    static let duplicateSelectedTabCloseInterval: TimeInterval = 0.15
 
     var rootURLDidChange: ((URL?) -> Void)?
 
@@ -78,32 +84,9 @@ final class WorkspaceModel: ObservableObject {
         rootURL.map(PathResolver.init(rootURL:))
     }
 
-    func openDirectoryPanel() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.prompt = "Open"
-        if panel.runModal() == .OK, let url = panel.url {
-            openDirectoryURL(url)
-        }
-    }
-
     func openDirectoryURL(_ url: URL) {
         setSidebarVisible(true)
         openWorkspace(url)
-    }
-
-    func openFilePanel() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = false
-        panel.canChooseFiles = true
-        panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [.item]
-        panel.prompt = "Open"
-        if panel.runModal() == .OK, let url = panel.url {
-            openDocumentURL(url)
-        }
     }
 
     func openDocumentURL(_ url: URL) {
@@ -216,6 +199,7 @@ final class WorkspaceModel: ObservableObject {
 
     func openWorkspace(_ url: URL, initialFile: URL? = nil) {
         stopSelectedDocumentMonitor()
+        cancelAllPayloadTasks()
         stopAccessingCurrentWorkspace()
 
         let canonical = url.standardizedFileURL.resolvingSymlinksInPath()
@@ -243,23 +227,32 @@ final class WorkspaceModel: ObservableObject {
             rootChildren = []
             return
         }
-        do {
-            rootChildren = try FileItemLoader.children(of: rootURL)
-        } catch {
-            if let initialWorkspaceFile,
-               let item = try? FileItemLoader.item(for: initialWorkspaceFile) {
-                rootChildren = [item]
-                statusMessage = nil
-                return
+        Task { @MainActor [weak self] in
+            do {
+                let children = try await FileContentLoader.children(of: rootURL)
+                guard self?.rootURL == rootURL else {
+                    return
+                }
+                self?.rootChildren = children
+            } catch {
+                guard self?.rootURL == rootURL else {
+                    return
+                }
+                if let initialWorkspaceFile = self?.initialWorkspaceFile,
+                   let item = try? FileItemLoader.item(for: initialWorkspaceFile) {
+                    self?.rootChildren = [item]
+                    self?.statusMessage = nil
+                    return
+                }
+                self?.statusMessage = error.localizedDescription
+                self?.rootChildren = []
             }
-            statusMessage = error.localizedDescription
-            rootChildren = []
         }
     }
 
     func children(of directoryURL: URL) async -> [FileItem] {
         do {
-            return try FileItemLoader.children(of: directoryURL)
+            return try await FileContentLoader.children(of: directoryURL)
         } catch {
             return []
         }
@@ -329,9 +322,7 @@ final class WorkspaceModel: ObservableObject {
         do {
             let source = try resolver.resolveWorkspacePath(filePath)
             guard let url = try resolver.resolveLink(rawLink, from: source) else {
-                if let external = URL(string: rawLink) {
-                    NSWorkspace.shared.open(external)
-                }
+                statusMessage = "Remote links are disabled."
                 return
             }
 
@@ -361,6 +352,7 @@ final class WorkspaceModel: ObservableObject {
         }
         let wasSelected = selectedTabID == id
         tabs.remove(at: idx)
+        cancelPayloadTask(for: id)
 
         if tabs.isEmpty {
             selectedTabID = nil
@@ -405,6 +397,7 @@ final class WorkspaceModel: ObservableObject {
         guard !tabs.isEmpty else {
             return
         }
+        cancelAllPayloadTasks()
         tabs = []
         selectedTabID = nil
     }
@@ -412,6 +405,9 @@ final class WorkspaceModel: ObservableObject {
     func closeOtherTabs() {
         guard let selectedTab else {
             return
+        }
+        for tab in tabs where tab.id != selectedTab.id {
+            cancelPayloadTask(for: tab.id)
         }
         tabs = [selectedTab]
         selectedTabID = selectedTab.id
@@ -431,39 +427,9 @@ final class WorkspaceModel: ObservableObject {
         updatePayloadSettings()
     }
 
-    func refresh(tabID: OpenTab.ID) {
-        guard let index = tabs.firstIndex(where: { $0.id == tabID }),
-              let rootURL,
-              let resolver
-        else {
-            return
-        }
-
-        var tab = tabs[index]
-        do {
-            let payload = try makePayload(for: tab.url, rootURL: rootURL, resolver: resolver)
-            tab.previewKind = payload.kind
-            tab.payload = payload
-            tab.errorMessage = nil
-        } catch {
-            tab.payload = nil
-            tab.errorMessage = error.localizedDescription
-        }
-        guard tab.previewKind != tabs[index].previewKind ||
-              tab.payload != tabs[index].payload ||
-              tab.errorMessage != tabs[index].errorMessage
-        else {
-            return
-        }
-        tabs[index] = tab
-    }
-
-    func payloadForSelectedTab() -> RendererPayload? {
-        selectedTab?.payload
-    }
-
     func clearWorkspace() {
         stopSelectedDocumentMonitor()
+        cancelAllPayloadTasks()
         stopAccessingCurrentWorkspace()
         rootURL = nil
         initialWorkspaceFile = nil
@@ -475,306 +441,4 @@ final class WorkspaceModel: ObservableObject {
         AppStorage.saveWorkspace(nil)
     }
 
-    private func makePayload(for url: URL, rootURL: URL, resolver: PathResolver) throws -> RendererPayload {
-        guard resolver.contains(url) else {
-            throw WorkspaceError.outsideWorkspace
-        }
-        let values = try url.resourceValues(forKeys: [.isDirectoryKey, .fileSizeKey])
-        let kind = FileTypeDetector.kind(for: url, isDirectory: values.isDirectory == true)
-        let previewKind = FileTypeDetector.previewKind(for: kind)
-        let filePath = try resolver.relativePath(for: url)
-        let rootPath = try resolver.relativePath(for: rootURL)
-        let theme = resolvedThemeName()
-
-        switch previewKind {
-        case .markdown:
-            let markdown = try String(contentsOf: url, encoding: .utf8)
-            return RendererPayload(
-                kind: .markdown,
-                filePath: filePath,
-                rootPath: rootPath,
-                name: url.lastPathComponent,
-                markdown: markdown,
-                content: nil,
-                mediaURL: nil,
-                language: nil,
-                size: Int64(values.fileSize ?? 0),
-                theme: theme,
-                fontSize: settings.fontSize,
-                fontFamily: settings.rendererFontFamily,
-                previewWidth: settings.previewWidth
-            )
-        case .image:
-            return RendererPayload(
-                kind: .image,
-                filePath: filePath,
-                rootPath: rootPath,
-                name: url.lastPathComponent,
-                markdown: nil,
-                content: nil,
-                mediaURL: AssetURLBuilder.assetURL(for: filePath),
-                language: nil,
-                size: Int64(values.fileSize ?? 0),
-                theme: theme,
-                fontSize: settings.fontSize,
-                fontFamily: settings.rendererFontFamily,
-                previewWidth: settings.previewWidth
-            )
-        case .text:
-            let content = try String(contentsOf: url, encoding: .utf8)
-            return RendererPayload(
-                kind: .text,
-                filePath: filePath,
-                rootPath: rootPath,
-                name: url.lastPathComponent,
-                markdown: nil,
-                content: content,
-                mediaURL: nil,
-                language: FileTypeDetector.highlightLanguage(for: url),
-                size: Int64(values.fileSize ?? 0),
-                theme: theme,
-                fontSize: settings.fontSize,
-                fontFamily: settings.rendererFontFamily,
-                previewWidth: settings.previewWidth
-            )
-        case .unsupported:
-            return RendererPayload(
-                kind: .unsupported,
-                filePath: filePath,
-                rootPath: rootPath,
-                name: url.lastPathComponent,
-                markdown: nil,
-                content: nil,
-                mediaURL: nil,
-                language: nil,
-                size: Int64(values.fileSize ?? 0),
-                theme: theme,
-                fontSize: settings.fontSize,
-                fontFamily: settings.rendererFontFamily,
-                previewWidth: settings.previewWidth
-            )
-        }
-    }
-
-    private func scheduleRefreshAfterSelection(tabID: OpenTab.ID) {
-        pendingTabSelectionRefresh?.cancel()
-        pendingTabSelectionRefresh = Task { @MainActor [weak self] in
-            await Task.yield()
-            guard !Task.isCancelled else {
-                return
-            }
-            self?.refresh(tabID: tabID)
-        }
-    }
-
-    private func updatePayloadSettings() {
-        for idx in tabs.indices {
-            guard var payload = tabs[idx].payload else {
-                continue
-            }
-            payload.theme = resolvedThemeName()
-            payload.fontSize = settings.fontSize
-            payload.fontFamily = settings.rendererFontFamily
-            payload.previewWidth = settings.previewWidth
-            tabs[idx].payload = payload
-        }
-        persistWorkspace()
-    }
-
-    private func resolvedThemeName() -> String {
-        switch settings.theme {
-        case .light:
-            return "light"
-        case .dark:
-            return "dark"
-        case .system:
-            return Self.isSystemDarkModeEnabled ? "dark" : "light"
-        }
-    }
-
-    private static var isSystemDarkModeEnabled: Bool {
-        UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
-    }
-
-    private func persistWorkspace() {
-        guard let rootURL else {
-            AppStorage.saveWorkspace(nil)
-            return
-        }
-        do {
-            let bookmarkData = try rootURL.bookmarkData(
-                options: [.withSecurityScope],
-                includingResourceValuesForKeys: nil,
-                relativeTo: nil
-            )
-            let resolver = PathResolver(rootURL: rootURL)
-            let selected = selectedTab.flatMap { try? resolver.relativePath(for: $0.url) }
-            let paths = tabs.compactMap { try? resolver.relativePath(for: $0.url) }
-            let persisted = PersistedWorkspace(
-                bookmarkData: bookmarkData,
-                rootPath: rootURL.path,
-                openFilePaths: paths,
-                selectedFilePath: selected
-            )
-            AppStorage.saveWorkspace(persisted)
-        } catch {
-            statusMessage = error.localizedDescription
-        }
-    }
-
-    private func restorePersistedWorkspace() {
-        guard let persisted = AppStorage.loadWorkspace() else {
-            return
-        }
-
-        var isStale = false
-        do {
-            let url = try URL(
-                resolvingBookmarkData: persisted.bookmarkData,
-                options: [.withSecurityScope],
-                relativeTo: nil,
-                bookmarkDataIsStale: &isStale
-            )
-            if isStale {
-                AppStorage.saveWorkspace(nil)
-                return
-            }
-            openWorkspace(url)
-            guard let resolver else {
-                return
-            }
-            for path in persisted.openFilePaths {
-                if let fileURL = try? resolver.resolveWorkspacePath(path) {
-                    openFile(fileURL)
-                }
-            }
-            if let selectedFilePath = persisted.selectedFilePath,
-               let selectedURL = try? resolver.resolveWorkspacePath(selectedFilePath),
-               let tab = tabs.first(where: { $0.url == selectedURL }) {
-                selectedTabID = tab.id
-            } else {
-                updateSelectedDocumentMonitor()
-            }
-        } catch {
-            AppStorage.saveWorkspace(nil)
-        }
-    }
-
-    private func stopAccessingCurrentWorkspace() {
-        for url in securityScopedURLs {
-            url.stopAccessingSecurityScopedResource()
-        }
-        securityScopedURLs.removeAll()
-    }
-
-    private func startAccessing(_ url: URL) {
-        let canonical = canonicalURL(url)
-        guard !securityScopedURLs.contains(canonical) else {
-            return
-        }
-        if canonical.startAccessingSecurityScopedResource() {
-            securityScopedURLs.append(canonical)
-        }
-    }
-
-    private func canonicalURL(_ url: URL) -> URL {
-        url.standardizedFileURL.resolvingSymlinksInPath()
-    }
-
-    private func canTrackDirectory(_ url: URL) -> Bool {
-        guard let rootURL else {
-            return false
-        }
-        return PathResolver(rootURL: rootURL).contains(canonicalURL(url))
-    }
-
-    private func expandSelectedDocumentDirectory() {
-        guard let rootURL,
-              let selectedTab
-        else {
-            return
-        }
-
-        let root = canonicalURL(rootURL)
-        let resolver = PathResolver(rootURL: root)
-        var updated = expandedDirectoryURLs
-        updated.insert(root)
-
-        var directoryURL = canonicalURL(selectedTab.url).deletingLastPathComponent()
-        while resolver.contains(directoryURL) {
-            updated.insert(directoryURL)
-            guard directoryURL.path != root.path else {
-                break
-            }
-            let parentURL = canonicalURL(directoryURL.deletingLastPathComponent())
-            guard parentURL.path != directoryURL.path else {
-                break
-            }
-            directoryURL = parentURL
-        }
-
-        guard updated != expandedDirectoryURLs else {
-            return
-        }
-        expandedDirectoryURLs = updated
-    }
-
-    private func updateSelectedDocumentMonitor() {
-        pendingDocumentRefresh?.cancel()
-        guard let selectedTab else {
-            stopSelectedDocumentMonitor()
-            return
-        }
-
-        let documentURL = canonicalURL(selectedTab.url)
-        guard monitoredDocumentURL != documentURL else {
-            return
-        }
-
-        startSelectedDocumentMonitor(for: documentURL)
-    }
-
-    private func scheduleRefreshForChangedDocument(_ documentURL: URL) {
-        pendingDocumentRefresh?.cancel()
-        pendingDocumentRefresh = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(150))
-            guard !Task.isCancelled else {
-                return
-            }
-            await MainActor.run {
-                self?.refreshChangedDocument(documentURL)
-            }
-        }
-    }
-
-    private func refreshChangedDocument(_ documentURL: URL) {
-        guard let selectedTabID,
-              let selectedTab,
-              canonicalURL(selectedTab.url) == documentURL
-        else {
-            return
-        }
-        refresh(tabID: selectedTabID)
-        startSelectedDocumentMonitor(for: documentURL)
-    }
-
-    private func stopSelectedDocumentMonitor() {
-        pendingDocumentRefresh?.cancel()
-        pendingDocumentRefresh = nil
-        selectedDocumentMonitor?.cancel()
-        selectedDocumentMonitor = nil
-        monitoredDocumentURL = nil
-    }
-
-    private func startSelectedDocumentMonitor(for documentURL: URL) {
-        selectedDocumentMonitor?.cancel()
-        monitoredDocumentURL = documentURL
-        selectedDocumentMonitor = DocumentChangeMonitor(url: documentURL) { [weak self] in
-            Task { @MainActor [weak self] in
-                self?.scheduleRefreshForChangedDocument(documentURL)
-            }
-        }
-    }
-
-    private static let duplicateSelectedTabCloseInterval: TimeInterval = 0.15
 }

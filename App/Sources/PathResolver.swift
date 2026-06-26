@@ -30,7 +30,7 @@ struct PathResolver: Sendable {
 
     func resolveWorkspacePath(_ path: String) throws -> URL {
         let cleaned = normalizeWorkspacePath(path)
-        guard !cleaned.contains("..") else {
+        guard !hasTraversalComponent(cleaned) else {
             throw PathResolverError.invalidPath
         }
         let relative = cleaned.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -81,5 +81,9 @@ struct PathResolver: Sendable {
             value = String(value.dropFirst(rootURL.path.count))
         }
         return value.replacingOccurrences(of: "\\", with: "/")
+    }
+
+    private func hasTraversalComponent(_ path: String) -> Bool {
+        path.split(separator: "/", omittingEmptySubsequences: false).contains("..")
     }
 }

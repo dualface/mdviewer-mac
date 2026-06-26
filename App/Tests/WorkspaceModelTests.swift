@@ -3,9 +3,9 @@ import XCTest
 
 @MainActor
 final class WorkspaceModelTests: XCTestCase {
-    private var tempRoot: URL!
-    private var defaults: UserDefaults!
-    private var defaultsSuiteName: String!
+    nonisolated(unsafe) private var tempRoot: URL!
+    nonisolated(unsafe) private var defaults: UserDefaults!
+    nonisolated(unsafe) private var defaultsSuiteName: String!
 
     override func setUpWithError() throws {
         defaultsSuiteName = "WorkspaceModelTests-\(UUID().uuidString)"
@@ -46,7 +46,7 @@ final class WorkspaceModelTests: XCTestCase {
 
         model.openDocumentURL(one)
         let firstTabID = try XCTUnwrap(model.selectedTabID)
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+        waitForMarkdown("# One", in: model)
 
         try "# Changed".write(to: one, atomically: true, encoding: .utf8)
         model.openDocumentURL(one.standardizedFileURL)
@@ -67,7 +67,7 @@ final class WorkspaceModelTests: XCTestCase {
         let one = tempRoot.appendingPathComponent("one.md")
 
         model.openDocumentURL(one)
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+        waitForMarkdown("# One", in: model)
 
         try "# Auto refreshed".write(to: one, atomically: true, encoding: .utf8)
 
@@ -86,7 +86,7 @@ final class WorkspaceModelTests: XCTestCase {
         let replacement = tempRoot.appendingPathComponent("replacement.md")
 
         model.openDocumentURL(one)
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# One")
+        waitForMarkdown("# One", in: model)
 
         try "# Replaced".write(to: replacement, atomically: true, encoding: .utf8)
         _ = try FileManager.default.replaceItemAt(one, withItemAt: replacement)
@@ -124,7 +124,7 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(result, .handled)
         XCTAssertEqual(model.rootURL, tempRoot.standardizedFileURL.resolvingSymlinksInPath())
         XCTAssertEqual(model.selectedTab?.url, nested.standardizedFileURL.resolvingSymlinksInPath())
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Nested")
+        waitForMarkdown("# Nested", in: model)
         XCTAssertTrue(model.settings.isSidebarVisible)
         XCTAssertTrue(model.isDirectoryExpanded(childDirectory))
     }
@@ -165,7 +165,7 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(result, .handled)
         XCTAssertEqual(model.rootURL, childDirectory.standardizedFileURL.resolvingSymlinksInPath())
         XCTAssertEqual(model.selectedTab?.url, nested.standardizedFileURL.resolvingSymlinksInPath())
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Nested")
+        waitForMarkdown("# Nested", in: model)
         XCTAssertFalse(model.settings.isSidebarVisible)
     }
 
@@ -186,7 +186,7 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertEqual(result, .handled)
         XCTAssertEqual(model.rootURL, outsideRoot.standardizedFileURL.resolvingSymlinksInPath())
         XCTAssertEqual(model.selectedTab?.url, outsideDocument.standardizedFileURL.resolvingSymlinksInPath())
-        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Outside")
+        waitForMarkdown("# Outside", in: model)
         XCTAssertFalse(model.settings.isSidebarVisible)
     }
 
@@ -376,6 +376,7 @@ final class WorkspaceModelTests: XCTestCase {
         model.openWorkspace(tempRoot)
         model.openFile(one)
         let firstTabID = try XCTUnwrap(model.selectedTabID)
+        waitForMarkdown("# One", in: model)
         model.openFile(two)
         try "# Updated".write(to: one, atomically: true, encoding: .utf8)
 
@@ -418,5 +419,22 @@ final class WorkspaceModelTests: XCTestCase {
         model.selectTab(at: 9)
 
         XCTAssertEqual(model.selectedTab?.url.lastPathComponent, "file-10.md")
+    }
+
+    private func waitForMarkdown(
+        _ markdown: String,
+        in model: WorkspaceModel,
+        timeout: TimeInterval = 2,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let expectation = XCTNSPredicateExpectation(
+            predicate: NSPredicate { model, _ in
+                (model as? WorkspaceModel)?.selectedTab?.payload?.markdown == markdown
+            },
+            object: model
+        )
+        let result = XCTWaiter.wait(for: [expectation], timeout: timeout)
+        XCTAssertEqual(result, .completed, file: file, line: line)
     }
 }

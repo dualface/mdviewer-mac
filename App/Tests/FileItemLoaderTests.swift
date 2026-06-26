@@ -23,10 +23,10 @@ final class FileItemLoaderTests: XCTestCase {
     func testChildrenHideDotFilesAndSortDirectoriesFirst() throws {
         let children = try FileItemLoader.children(of: tempRoot)
 
-        XCTAssertEqual(children.map(\.name), ["AFolder", "BFolder", "config.json", "readme.md"])
+        XCTAssertEqual(children.map(\.name), ["AFolder", "BFolder", "config.json", "image.png", "readme.md"])
         XCTAssertEqual(children[0].kind, .directory)
         XCTAssertEqual(children[2].kind, .text)
-        XCTAssertEqual(children[3].kind, .markdown)
-        XCTAssertFalse(children.contains { $0.name == "image.png" })
+        XCTAssertEqual(children[3].kind, .image)
+        XCTAssertEqual(children[4].kind, .markdown)
     }
 }
