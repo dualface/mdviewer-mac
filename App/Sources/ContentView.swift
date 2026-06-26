@@ -278,13 +278,15 @@ private struct ToolbarView: View {
 
             Picker("Width", selection: previewWidthBinding) {
                 ForEach(PreviewWidth.allCases, id: \.self) { width in
-                    Text(width.label).tag(width)
+                    Image(systemName: width.toolbarSystemImage)
+                        .accessibilityLabel(width.label)
+                        .tag(width)
                 }
             }
             .pickerStyle(.segmented)
             .labelsHidden()
             .controlSize(.small)
-            .frame(width: 232)
+            .frame(width: 132)
             .help("Preview Width")
             .accessibilityLabel("Preview Width")
 
@@ -317,6 +319,21 @@ private struct ToolbarView: View {
             workspace.settings.fontSize
         } set: { fontSize in
             workspace.setPreviewFontSize(fontSize)
+        }
+    }
+}
+
+private extension PreviewWidth {
+    var toolbarSystemImage: String {
+        switch self {
+        case .full:
+            return "arrow.left.and.right"
+        case .wide:
+            return "rectangle"
+        case .medium:
+            return "rectangle.center.inset.filled"
+        case .narrow:
+            return "sidebar.right"
         }
     }
 }
