@@ -239,13 +239,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func application(_ application: NSApplication, open urls: [URL]) {
         Task { @MainActor in
-            openDocumentURLs(urls)
+            openDocumentURLs(urls, opensWorkspaceIfNeeded: true)
         }
     }
 
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         Task { @MainActor in
-            openDocumentURLs([URL(fileURLWithPath: filename)])
+            openDocumentURLs([URL(fileURLWithPath: filename)], opensWorkspaceIfNeeded: true)
         }
         return true
     }
@@ -355,8 +355,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch result {
         case .handled:
             return true
-        case .needsWorkspace(let documentURL):
-            openDocumentURLsInNewInstance([documentURL])
+        case .needsWorkspace:
             return false
         }
     }

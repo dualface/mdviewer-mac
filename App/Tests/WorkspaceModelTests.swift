@@ -169,6 +169,27 @@ final class WorkspaceModelTests: XCTestCase {
         XCTAssertFalse(model.settings.isSidebarVisible)
     }
 
+    func testOpeningExternalDocumentCanReplaceWorkspaceWhenAllowed() throws {
+        let model = WorkspaceModel()
+        let outsideRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let outsideDocument = outsideRoot.appendingPathComponent("outside.md")
+        try FileManager.default.createDirectory(at: outsideRoot, withIntermediateDirectories: true)
+        try "# Outside".write(to: outsideDocument, atomically: true, encoding: .utf8)
+        defer {
+            try? FileManager.default.removeItem(at: outsideRoot)
+        }
+
+        model.openWorkspace(tempRoot)
+        let result = model.openExternalDocumentURL(outsideDocument, opensWorkspaceIfNeeded: true)
+
+        XCTAssertEqual(result, .handled)
+        XCTAssertEqual(model.rootURL, outsideRoot.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTab?.url, outsideDocument.standardizedFileURL.resolvingSymlinksInPath())
+        XCTAssertEqual(model.selectedTab?.payload?.markdown, "# Outside")
+        XCTAssertFalse(model.settings.isSidebarVisible)
+    }
+
     func testOpeningDocumentExpandsContainingDirectoryChain() throws {
         let model = WorkspaceModel()
         let firstLevel = tempRoot.appendingPathComponent("first", isDirectory: true)
