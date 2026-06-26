@@ -345,6 +345,13 @@ final class WorkspaceModel: ObservableObject {
         refresh(tabID: selectedTabID)
     }
 
+    func systemAppearanceDidChange() {
+        guard settings.theme == .system else {
+            return
+        }
+        updatePayloadSettings()
+    }
+
     func refresh(tabID: OpenTab.ID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }),
               let rootURL,
@@ -485,9 +492,12 @@ final class WorkspaceModel: ObservableObject {
         case .dark:
             return "dark"
         case .system:
-            let appearance = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua])
-            return appearance == .darkAqua ? "dark" : "light"
+            return Self.isSystemDarkModeEnabled ? "dark" : "light"
         }
+    }
+
+    private static var isSystemDarkModeEnabled: Bool {
+        UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
     }
 
     private func persistWorkspace() {

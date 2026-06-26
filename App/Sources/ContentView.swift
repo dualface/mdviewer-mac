@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var workspace: WorkspaceModel
+    @Environment(\.colorScheme) private var effectiveColorScheme
     @State private var liveSidebarWidth: Double?
 
     private var sidebarWidth: Double {
@@ -34,7 +35,21 @@ struct ContentView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(AppBackgroundView())
+        .overlay {
+            WindowAppearanceBridge(theme: workspace.settings.theme)
+                .frame(width: 0, height: 0)
+                .allowsHitTesting(false)
+        }
         .preferredColorScheme(colorScheme)
+        .onAppear {
+            workspace.systemAppearanceDidChange()
+        }
+        .onChange(of: effectiveColorScheme) {
+            workspace.systemAppearanceDidChange()
+        }
+        .onChange(of: workspace.settings.theme) {
+            workspace.systemAppearanceDidChange()
+        }
         .onDrop(of: [.fileURL], isTargeted: nil) { providers in
             handleDrop(providers)
         }
@@ -71,6 +86,39 @@ struct ContentView: View {
             return true
         }
         return false
+    }
+}
+
+private struct WindowAppearanceBridge: NSViewRepresentable {
+    let theme: AppTheme
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            applyAppearance(to: view)
+        }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            applyAppearance(to: view)
+        }
+    }
+
+    private func applyAppearance(to view: NSView) {
+        view.window?.appearance = appearance
+    }
+
+    private var appearance: NSAppearance? {
+        switch theme {
+        case .system:
+            return nil
+        case .light:
+            return NSAppearance(named: .aqua)
+        case .dark:
+            return NSAppearance(named: .darkAqua)
+        }
     }
 }
 
